@@ -53,9 +53,9 @@ jobs:
           releaseName: ApexTerm v__VERSION__
           releaseBody: |
             ## 下载
-            - macOS Apple Silicon：`ApexTerm_x.y.z_aarch64.dmg`
-            - macOS Intel：`ApexTerm_x.y.z_x64.dmg`
-            - Windows：`ApexTerm_x.y.z_x64-setup.exe`
+            - macOS Apple Silicon：`ApexTerm___VERSION___aarch64.dmg`
+            - macOS Intel：`ApexTerm___VERSION___x64.dmg`
+            - Windows：`ApexTerm___VERSION___x64-setup.exe`
 
             macOS 首次打开若提示"无法验证开发者"：右键 → 打开；之后的版本可在应用内自动更新。
             `latest.json` 与 `.sig` 文件供应用内更新器使用，无需手动下载。
