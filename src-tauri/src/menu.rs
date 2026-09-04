@@ -109,6 +109,7 @@ pub fn build<R: Runtime, M: Manager<R>>(app: &M, keys: &HashMap<&'static str, St
         true,
         &[
             &PredefinedMenuItem::about(app, Some("关于 ApexTerm"), Some(about))?,
+            &item("check-update", "检查更新…")?,
             &PredefinedMenuItem::separator(app)?,
             &item("settings", "设置…")?,
             &PredefinedMenuItem::separator(app)?,
@@ -194,7 +195,17 @@ pub fn build<R: Runtime, M: Manager<R>>(app: &M, keys: &HashMap<&'static str, St
         ],
     )?;
 
-    Menu::with_items(app, &[&app_menu, &edit_menu, &hosts_menu, &terminal_menu, &window_menu])
+    let help_menu = Submenu::with_items(
+        app,
+        "帮助",
+        true,
+        &[
+            &item("open-homepage", "项目主页（GitHub）")?,
+            &item("open-issues", "反馈问题")?,
+        ],
+    )?;
+
+    Menu::with_items(app, &[&app_menu, &edit_menu, &hosts_menu, &terminal_menu, &window_menu, &help_menu])
 }
 
 /// 首次安装菜单，并注册事件转发

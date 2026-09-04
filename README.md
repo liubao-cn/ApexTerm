@@ -19,7 +19,7 @@
 
 ## 安装（macOS）
 
-1. 打开 `.dmg`，把 ApexTerm 拖到「应用程序」。
+1. 从 [Releases](https://github.com/liubao-cn/ApexTerm/releases) 下载 `.dmg`（Apple Silicon 选 `aarch64`，Intel 选 `x64`），打开后把 ApexTerm 拖到「应用程序」。
 2. 首次打开若提示"无法验证开发者"（未做 Apple 签名），任选其一：
    - 应用程序里 **右键 → 打开**，再点「打开」；或
    - 终端执行 `xattr -dr com.apple.quarantine /Applications/ApexTerm.app`
@@ -68,6 +68,12 @@ cargo test --manifest-path src-tauri/Cargo.toml
 3. `pnpm install && pnpm tauri build` → `src-tauri/target/release/bundle/msi/` 或 `nsis/`。
 
 Windows 上的差异：本地终端用 PowerShell 7（若已安装）或 Windows PowerShell；云账号 SecretKey 在没有钥匙串时存到程序数据目录下仅当前用户可读的文件；`~/.ssh/config` 与 `known_hosts` 读 `%USERPROFILE%\.ssh`。Windows 分支未经实机测试，欢迎反馈。
+
+## 发布与自动更新
+
+- 发布：`pnpm release 1.0.1` 同步 `package.json` / `tauri.conf.json` / `Cargo.toml` 的版本号并打 `v1.0.1` 标签，`git push --follow-tags` 后 GitHub Actions（`.github/workflows/release.yml`）在 macOS（Apple Silicon、Intel）与 Windows 上构建并直接发布 Release。
+- 更新：程序启动后静默检查 [Releases](https://github.com/liubao-cn/ApexTerm/releases) 的 `latest.json`，有新版本弹窗提示，下载后校验签名并重启换新；也可在「ApexTerm → 检查更新…」手动检查，「设置 → 关于」可关闭启动检查。
+- 自建发布需要在仓库 Secrets 里配置 `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`（`pnpm tauri signer generate` 生成），并把公钥写到 `tauri.conf.json` 的 `plugins.updater.pubkey`。
 
 ## 目录
 

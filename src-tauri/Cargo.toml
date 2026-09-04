@@ -36,6 +36,8 @@ sysinfo = "0.38"
 # 终端粘贴：读剪贴板里的文件列表 / 图片（图片存成 PNG 后粘路径）
 arboard = "3.6"
 png = "0.18"
+tauri-plugin-updater = "=2.10.1"
+tauri-plugin-process = "=2.3.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 security-framework = "3"

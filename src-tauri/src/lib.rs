@@ -29,7 +29,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
+            // 更新器只在桌面端有意义；dev 构建里也注册，便于手动"检查更新"走一遍流程
+            #[cfg(desktop)]
+            app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
             let ssh_dir = dirs::home_dir()
                 .ok_or("无法定位用户主目录")?
                 .join(".ssh");

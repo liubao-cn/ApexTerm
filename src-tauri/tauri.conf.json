@@ -31,12 +31,25 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "macOS": {
+      "signingIdentity": "-"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDIyOTM3MzY5MEVBREM4MzYKUldRMnlLME9hWE9USW40Q2hpRGZTZitJZUtESXN1aEViWTRhTzdXQ2RxNFpKN1FZZXVESFNyc1cK",
+      "endpoints": ["https://github.com/liubao-cn/ApexTerm/releases/latest/download/latest.json"],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

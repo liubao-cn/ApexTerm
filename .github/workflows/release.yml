@@ -1,0 +1,65 @@
+# 推送 v* 标签（pnpm release <版本> 生成）→ 三个平台并行构建 → 直接发布 GitHub Release，
+# 并上传 latest.json + 签名文件供应用内更新器使用。
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target aarch64-apple-darwin
+          - platform: macos-latest
+            args: --target x86_64-apple-darwin
+          - platform: windows-latest
+            args: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v__VERSION__
+          releaseName: ApexTerm v__VERSION__
+          releaseBody: |
+            ## 下载
+            - macOS Apple Silicon：`ApexTerm_x.y.z_aarch64.dmg`
+            - macOS Intel：`ApexTerm_x.y.z_x64.dmg`
+            - Windows：`ApexTerm_x.y.z_x64-setup.exe`
+
+            macOS 首次打开若提示"无法验证开发者"：右键 → 打开；之后的版本可在应用内自动更新。
+            `latest.json` 与 `.sig` 文件供应用内更新器使用，无需手动下载。
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+          args: ${{ matrix.args }}

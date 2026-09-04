@@ -9,6 +9,8 @@ import { useHostsStore } from "../stores/hosts";
 import { useTerminalsStore } from "../stores/terminals";
 import { useCommandsStore } from "../stores/commands";
 import { useCloudStore } from "../stores/cloud";
+import { HOMEPAGE_URL, useUpdaterStore } from "../stores/updater";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { getTerm } from "../terminalRegistry";
 import { neighborPane, type NavDir } from "../paneNav";
 import { appShortcut, isTabModifier } from "../platform";
@@ -22,6 +24,7 @@ import HostForm from "./HostForm.vue";
 import CandidatesPanel from "./CandidatesPanel.vue";
 import LocalConsole from "./LocalConsole.vue";
 import CommandPalette from "./CommandPalette.vue";
+import UpdateDialog from "./UpdateDialog.vue";
 import TerminalTabs from "./TerminalTabs.vue";
 import PaneLayout from "./PaneLayout.vue";
 import FilesView from "./FilesView.vue";
@@ -39,6 +42,7 @@ const store = useHostsStore();
 const terminals = useTerminalsStore();
 const commands = useCommandsStore();
 const cloud = useCloudStore();
+const updater = useUpdaterStore();
 const settings = useSettingsStore();
 const files = useFilesStore();
 const shortcuts = useShortcutsStore();
@@ -138,6 +142,15 @@ function handleMenu(id: string) {
     case "settings":
       settings.show();
       break;
+    case "check-update":
+      updater.checkForUpdates({ manual: true });
+      break;
+    case "open-homepage":
+      openUrl(HOMEPAGE_URL).catch(() => {});
+      break;
+    case "open-issues":
+      openUrl(`${HOMEPAGE_URL}/issues`).catch(() => {});
+      break;
     case "toggle-sidebar":
       settings.toggleSidebar();
       break;
@@ -224,6 +237,10 @@ onMounted(async () => {
   // 恢复上次勾选了"自动上传"的联动组
   files.resumeWatchers().catch(() => {});
   if (settings.prefs.probeOnStart) store.probeAllServers();
+  // 启动 5 秒后静默检查一次新版本；dev 构建没有可比对的发布版本，跳过
+  if (settings.prefs.autoCheckUpdate && !import.meta.env.DEV) {
+    setTimeout(() => updater.checkForUpdates({ manual: false }), 5000);
+  }
   window.addEventListener("keydown", handleKeydown);
   unlistenMenu = await listen<string>("menu", (e) => handleMenu(e.payload));
   // 文件拖到终端面板上 → 粘路径；文件管理标签有自己的上传处理（按 active 守卫），这里只管终端标签
@@ -338,6 +355,7 @@ onBeforeUnmount(() => {
     <SettingsModal />
     <EditContextMenu />
     <CommandPalette v-model:show="paletteOpen" />
+    <UpdateDialog />
   </div>
 </template>
 

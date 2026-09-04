@@ -43,12 +43,14 @@ import { CURATED_IDS, THEME_FAMILIES } from "../themeCatalog";
 import { FONT_MAX, FONT_MIN, useSettingsStore, type SettingsSection } from "../stores/settings";
 import { useShortcutsStore } from "../stores/shortcuts";
 import { useHostsStore } from "../stores/hosts";
+import { useUpdaterStore } from "../stores/updater";
 import { accelFromEvent, accelLabel, appShortcut, fileManagerName, isMac } from "../platform";
 import { errorText } from "../api";
 
 const settings = useSettingsStore();
 const shortcuts = useShortcutsStore();
 const hosts = useHostsStore();
+const updater = useUpdaterStore();
 const message = useMessage();
 
 const p = computed(() => settings.prefs);
@@ -532,6 +534,11 @@ function revealData() {
               <div class="inline">
                 <n-button size="small" secondary @click="revealData">在 {{ fileManagerName }} 中显示数据文件</n-button>
                 <n-button size="small" secondary @click="hosts.load()">重新读取 SSH 配置</n-button>
+                <n-button size="small" secondary :loading="updater.phase === 'checking'" @click="updater.checkForUpdates({ manual: true })">检查更新</n-button>
+              </div>
+              <div class="toggle" style="margin-top: 14px">
+                <div><b>启动时检查更新</b><div class="muted small">从 GitHub Releases 读取版本信息，有新版本才提示；下载的安装包会校验签名</div></div>
+                <n-switch :value="p.autoCheckUpdate" @update:value="(v: boolean) => settings.patch({ autoCheckUpdate: v })" />
               </div>
               <p class="muted small" style="margin: 14px 0 0">
                 所有主机信息以 <span class="mono">~/.ssh/config</span> 为唯一数据源；分组、备注、排序、联动组、快捷键等附加信息存在程序数据文件里；云账号密钥存在系统钥匙串。

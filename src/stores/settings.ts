@@ -40,6 +40,8 @@ export interface Prefs {
   appTheme: AppTheme;
   tooltipDelay: number;
   probeOnStart: boolean;
+  /** 启动后静默检查一次新版本（GitHub Releases） */
+  autoCheckUpdate: boolean;
   // ---- 文件 ----
   showHidden: boolean;
   defaultLocalDir: string;
@@ -81,6 +83,7 @@ export const DEFAULTS: Prefs = {
   appTheme: "dark",
   tooltipDelay: 150,
   probeOnStart: false,
+  autoCheckUpdate: true,
   showHidden: true,
   defaultLocalDir: "",
   doubleClickTransfer: true,

@@ -104,10 +104,30 @@ export function createRuntime(sessionId: string, opts: CreateOptions): TermRunti
   return rt;
 }
 
+/**
+ * 兜住 WebKit 输入法直接插入的字符（中文冒号、问号、引号等按着 Shift 打出的全角标点）。
+ * WebKit 的事件顺序是 input(insertText) → keydown(keyCode 229)，而 xterm 在 Shift 的 keydown 之后
+ * 直到 keyup 之前都认为"正有按键在处理"，会把这条 input 丢掉，于是字符消失。
+ * 这里在 xterm 自己的 input 监听之后再监听一次：xterm 没发出数据的 insertText 由我们补发。
+ */
+function fixImeDirectInsert(term: Terminal) {
+  const ta = term.textarea;
+  if (!ta) return;
+  let sentDuringInput = false;
+  term.onData(() => (sentDuringInput = true));
+  ta.addEventListener("beforeinput", () => (sentDuringInput = false));
+  ta.addEventListener("input", (e) => {
+    const ev = e as InputEvent;
+    if (ev.inputType !== "insertText" || !ev.data || ev.isComposing || sentDuringInput) return;
+    term.input(ev.data, true);
+  });
+}
+
 /** 把终端挂到容器里：首次 open，之后只是把已有 DOM 移过去 */
 export function attach(rt: TermRuntime, container: HTMLElement) {
   if (!rt.term.element) {
     rt.term.open(container);
+    fixImeDirectInsert(rt.term);
     try {
       const webgl = new WebglAddon();
       webgl.onContextLoss(() => webgl.dispose());
