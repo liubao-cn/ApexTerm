@@ -70,6 +70,30 @@ function show(el: TipEl) {
   current = el;
 }
 
+/** 非指令用法：在指定坐标附近立刻显示一条提示（终端链接悬停用），hideTip 收起 */
+export function showTipAt(text: string, x: number, y: number) {
+  clearTimeout(timer);
+  timer = 0;
+  current = null;
+  const b = ensureBox();
+  b.textContent = text;
+  b.classList.add("show");
+  b.style.left = "0px";
+  b.style.top = "0px";
+  const w = b.offsetWidth;
+  const h = b.offsetHeight;
+  const margin = 6;
+  let left = Math.max(margin, Math.min(x - w / 2, window.innerWidth - w - margin));
+  let top = y + 18;
+  if (top + h > window.innerHeight - margin) top = y - h - 12;
+  b.style.left = `${Math.round(left)}px`;
+  b.style.top = `${Math.round(top)}px`;
+}
+
+export function hideTip() {
+  hide();
+}
+
 function onEnter(this: TipEl) {
   clearTimeout(timer);
   const el = this;

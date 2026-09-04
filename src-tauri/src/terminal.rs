@@ -174,6 +174,10 @@ fn build_command(target: &TerminalTarget, term_type: &str) -> Result<CommandBuil
     cmd.env("TERM", term_type);
     cmd.env("COLORTERM", "truecolor");
     cmd.env("TERM_PROGRAM", "ApexTerm");
+    cmd.env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
+    // xterm.js 原生支持 OSC 8 超链接，但 CLI 工具只认名单里的终端；这个变量是 supports-hyperlinks
+    // （Node / Rust 两个生态）约定的强制开关，让 Claude Code 之类的工具直接发可点击链接而不是把 URL 打印出来
+    cmd.env("FORCE_HYPERLINK", "1");
     #[cfg(not(windows))]
     {
         cmd.env("LANG", preferred_lang());

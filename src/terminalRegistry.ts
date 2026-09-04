@@ -4,8 +4,9 @@ import { SearchAddon } from "@xterm/addon-search";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { api } from "./api";
+import { hideTip, showTipAt } from "./tooltip";
 
 /**
  * 终端运行时：xterm 实例 + pty 连接状态。按会话 id 登记，独立于 Vue 组件的挂载/卸载，
@@ -66,9 +67,47 @@ export function getRuntime(sessionId: string | null | undefined): TermRuntime | 
   return sessionId ? runtimes.get(sessionId) : undefined;
 }
 
+/** OSC 8 链接里的 file:// → 本机路径（把 %E6%96%B9 这类转义还原成中文） */
+function fileUrlToPath(uri: string): string | null {
+  if (!/^file:/i.test(uri)) return null;
+  try {
+    const u = new URL(uri);
+    if (u.hostname && u.hostname !== "localhost") return null;
+    return decodeURIComponent(u.pathname);
+  } catch {
+    return null;
+  }
+}
+
+/** 链接悬停时的可读文本：file 链接显示还原后的路径，其它显示解码后的 URL */
+function linkTipText(uri: string): string {
+  const path = fileUrlToPath(uri);
+  if (path) return `${path}\n点击在${fileManagerName()}中显示`;
+  try {
+    return `${decodeURI(uri)}\n点击打开`;
+  } catch {
+    return `${uri}\n点击打开`;
+  }
+}
+
+function fileManagerName(): string {
+  return navigator.platform.toLowerCase().includes("mac") ? " Finder " : "文件管理器";
+}
+
+/** 打开程序输出里的 OSC 8 链接：file:// 在文件管理器里定位，其它交给系统默认程序 */
+function activateLink(uri: string) {
+  const path = fileUrlToPath(uri);
+  (path ? revealItemInDir(path) : openUrl(uri)).catch(() => {});
+}
+
 export function createRuntime(sessionId: string, opts: CreateOptions): TermRuntime {
   const term = new Terminal({
     allowProposedApi: true,
+    linkHandler: {
+      activate: (_e, uri) => activateLink(uri),
+      hover: (e, uri) => showTipAt(linkTipText(uri), e.clientX, e.clientY),
+      leave: () => hideTip(),
+    },
     fontFamily: opts.fontFamily,
     fontSize: opts.fontSize,
     lineHeight: opts.lineHeight,
