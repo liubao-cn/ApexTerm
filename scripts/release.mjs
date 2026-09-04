@@ -38,8 +38,11 @@ for (const [file, patch] of Object.entries(files)) {
   }
   writeFileSync(p, after);
 }
-// 让 Cargo.lock 里的自身版本跟上（离线，不动其它依赖）
-sh("cargo metadata --offline --format-version 1", { cwd: resolve(root, "src-tauri") });
+// 让 Cargo.lock 里的自身版本跟上（离线，不动其它依赖）；metadata 输出很大，直接丢弃，避免撑爆 execSync 缓冲
+execSync("cargo metadata --offline --format-version 1", {
+  cwd: resolve(root, "src-tauri"),
+  stdio: ["ignore", "ignore", "inherit"],
+});
 
 sh("git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock");
 sh(`git commit -q -m "chore(release): 发布 v${version}"`);
