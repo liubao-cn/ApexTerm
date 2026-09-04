@@ -40,7 +40,7 @@ import {
   type TermThemePreset,
 } from "../themes";
 import { CURATED_IDS, THEME_FAMILIES } from "../themeCatalog";
-import { FONT_MAX, FONT_MIN, useSettingsStore, type SettingsSection } from "../stores/settings";
+import { FONT_MAX, FONT_MIN, useSettingsStore, type SettingsSection, type TermProgram } from "../stores/settings";
 import { useShortcutsStore } from "../stores/shortcuts";
 import { useHostsStore } from "../stores/hosts";
 import { useUpdaterStore } from "../stores/updater";
@@ -76,6 +76,11 @@ const fontOptions = computed(() => {
   return list;
 });
 const termTypeOptions = TERM_TYPES.map((t) => ({ label: t, value: t }));
+const termProgramOptions: { label: string; value: TermProgram }[] = [
+  { label: "ApexTerm（如实）", value: "apexterm" },
+  { label: "iTerm2 兼容", value: "iterm" },
+  { label: "VS Code 兼容", value: "vscode" },
+];
 
 // ---- 主题库：精选按家族分组展示；600+ 完整库收在「全部」里搜索 ----
 type Filter = "featured" | "dark" | "light" | "favorites" | "all";
@@ -277,6 +282,15 @@ function revealData() {
               <div class="row">
                 <div class="row-label">终端类型 <span class="muted">TERM</span></div>
                 <n-select :value="p.termType" :options="termTypeOptions" size="small" style="max-width: 220px" @update:value="(v: string) => settings.patch({ termType: v })" />
+              </div>
+              <div class="row">
+                <div class="row-label">
+                  自报终端身份 <span class="muted">TERM_PROGRAM</span>
+                  <div class="muted small" style="font-weight: 400; margin-top: 2px">
+                    Devin CLI 等工具只给名单里的终端发纯超链接，否则会把百分号编码的 URL 打印在链接后面。选「iTerm2 兼容」可去掉；只影响新开的终端。
+                  </div>
+                </div>
+                <n-select :value="p.termProgram" :options="termProgramOptions" size="small" style="max-width: 220px" @update:value="(v: TermProgram) => settings.patch({ termProgram: v })" />
               </div>
             </section>
 

@@ -362,9 +362,17 @@ pub fn open_terminal(
     cols: u16,
     rows: u16,
     term_type: Option<String>,
+    term_program: Option<String>,
     on_event: Channel<TermMessage>,
 ) -> Result<String> {
-    term.open(&target, cols, rows, term_type.as_deref().unwrap_or("xterm-256color"), on_event)
+    term.open(
+        &target,
+        cols,
+        rows,
+        term_type.as_deref().unwrap_or("xterm-256color"),
+        term_program.as_deref().unwrap_or("apexterm"),
+        on_event,
+    )
 }
 
 #[tauri::command]

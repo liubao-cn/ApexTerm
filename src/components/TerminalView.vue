@@ -119,7 +119,7 @@ async function connect() {
         if (m.code === 0) rt.reconnectAttempts = 0;
         scheduleAutoReconnect(m.code);
       }
-    }, settings.prefs.termType);
+    }, settings.prefs.termType, settings.prefs.termProgram);
     if (rt.connectionToken !== token) {
       api.closeTerminal(id).catch(() => {});
       return;

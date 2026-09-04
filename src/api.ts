@@ -456,10 +456,11 @@ export const api = {
     rows: number,
     onMessage: (m: TermMessage) => void,
     termType = "xterm-256color",
+    termProgram = "apexterm",
   ) => {
     const onEvent = new Channel<TermMessage>();
     onEvent.onmessage = onMessage;
-    return invoke<string>("open_terminal", { target, cols, rows, termType, onEvent });
+    return invoke<string>("open_terminal", { target, cols, rows, termType, termProgram, onEvent });
   },
   appInfo: () => invoke<AppInfo>("app_info"),
   clipboardPaste: () => invoke<PastePayload>("clipboard_paste_payload"),

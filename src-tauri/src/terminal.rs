@@ -123,7 +123,18 @@ fn local_shell() -> (String, Vec<&'static str>) {
     }
 }
 
-fn build_command(target: &TerminalTarget, term_type: &str) -> Result<CommandBuilder> {
+/// 对外自报的终端身份（TERM_PROGRAM / TERM_PROGRAM_VERSION）。
+/// 默认如实报 ApexTerm；Devin CLI 这类工具只给名单里的终端发纯超链接（否则在链接后面打印 URL），
+/// 用户可在设置里改成 iTerm2 / VS Code 兼容——两者的能力集与 xterm.js 一致（VS Code 本身就是 xterm.js）。
+fn term_program_env(term_program: &str) -> (&'static str, String) {
+    match term_program {
+        "iterm" => ("iTerm.app", "3.5.0".into()),
+        "vscode" => ("vscode", "1.90.0".into()),
+        _ => ("ApexTerm", env!("CARGO_PKG_VERSION").into()),
+    }
+}
+
+fn build_command(target: &TerminalTarget, term_type: &str, term_program: &str) -> Result<CommandBuilder> {
     let home = dirs::home_dir().ok_or_else(|| AppError::msg("无法定位用户主目录"))?;
     let mut cmd = match target {
         TerminalTarget::Ssh { alias, command } => {
@@ -173,8 +184,9 @@ fn build_command(target: &TerminalTarget, term_type: &str) -> Result<CommandBuil
     };
     cmd.env("TERM", term_type);
     cmd.env("COLORTERM", "truecolor");
-    cmd.env("TERM_PROGRAM", "ApexTerm");
-    cmd.env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
+    let (program, version) = term_program_env(term_program);
+    cmd.env("TERM_PROGRAM", program);
+    cmd.env("TERM_PROGRAM_VERSION", version);
     // xterm.js 原生支持 OSC 8 超链接，但 CLI 工具只认名单里的终端；这个变量是 supports-hyperlinks
     // （Node / Rust 两个生态）约定的强制开关，让 Claude Code 之类的工具直接发可点击链接而不是把 URL 打印出来
     cmd.env("FORCE_HYPERLINK", "1");
@@ -202,6 +214,7 @@ impl TerminalState {
         cols: u16,
         rows: u16,
         term_type: &str,
+        term_program: &str,
         channel: Channel<TermMessage>,
     ) -> Result<String> {
         let pty = native_pty_system();
@@ -213,7 +226,7 @@ impl TerminalState {
                 pixel_height: 0,
             })
             .map_err(|e| AppError::msg(format!("创建伪终端失败: {e}")))?;
-        let cmd = build_command(target, term_type)?;
+        let cmd = build_command(target, term_type, term_program)?;
         let mut child = pair
             .slave
             .spawn_command(cmd)

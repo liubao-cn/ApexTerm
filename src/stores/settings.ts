@@ -4,6 +4,7 @@ import { DEFAULT_THEME_ID, FONT_OPTIONS, presetById, toXtermTheme, type TermThem
 import { setTooltipDelay } from "../tooltip";
 
 export type AppTheme = "dark" | "light" | "system";
+export type TermProgram = "apexterm" | "iterm" | "vscode";
 export type SettingsSection = "terminal" | "themes" | "shortcuts" | "files" | "ui" | "about";
 export type SidebarPanel = "hosts" | "commands";
 export const SIDEBAR_MIN = 240;
@@ -36,6 +37,8 @@ export interface Prefs {
   brightBold: boolean;
   autoReconnect: boolean;
   termType: string;
+  /** 对程序自报的终端身份：apexterm 如实；iterm / vscode 兼容名单制的 CLI（如 Devin CLI 只给名单终端发纯超链接） */
+  termProgram: TermProgram;
   // ---- 界面 ----
   appTheme: AppTheme;
   tooltipDelay: number;
@@ -80,6 +83,7 @@ export const DEFAULTS: Prefs = {
   brightBold: false,
   autoReconnect: true,
   termType: "xterm-256color",
+  termProgram: "apexterm",
   appTheme: "dark",
   tooltipDelay: 150,
   probeOnStart: false,
