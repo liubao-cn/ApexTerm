@@ -1,0 +1,49 @@
+[package]
+name = "apexterm"
+version = "1.0.0"
+description = "管理免密 SSH 服务器的桌面程序"
+authors = ["mac"]
+edition = "2021"
+
+[lib]
+name = "apexterm_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+dirs = "6"
+chrono = "0.4"
+glob = "0.3"
+portable-pty = "0.9"
+base64 = "0.23"
+ureq = "3"
+sha2 = "0.11"
+hmac = "0.13"
+hex = "0.4"
+tauri-plugin-dialog = "=2.7.2"
+russh-sftp = "2.4"
+notify = "8"
+tokio = { version = "1", features = ["process", "io-util", "rt-multi-thread", "macros", "fs", "sync", "time"] }
+tauri-plugin-clipboard-manager = "=2.3.2"
+sysinfo = "0.38"
+# 终端粘贴：读剪贴板里的文件列表 / 图片（图片存成 PNG 后粘路径）
+arboard = "3.6"
+png = "0.18"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "3"
+
+# 正式构建：最高优化 + 全程序 LTO + 单编译单元，体积更小、启动与传输更快
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
