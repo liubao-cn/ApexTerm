@@ -27,6 +27,8 @@ const files = {
   "package.json": (s) => s.replace(/"version":\s*"[^"]+"/, `"version": "${version}"`),
   "src-tauri/tauri.conf.json": (s) => s.replace(/"version":\s*"[^"]+"/, `"version": "${version}"`),
   "src-tauri/Cargo.toml": (s) => s.replace(/^version\s*=\s*"[^"]+"/m, `version = "${version}"`),
+  // Cargo.lock 里自身的条目直接改文本；跑 cargo metadata 会因未下载的可选依赖在离线时失败
+  "src-tauri/Cargo.lock": (s) => s.replace(/(\[\[package\]\]\nname = "apexterm"\nversion = )"[^"]+"/, `$1"${version}"`),
 };
 for (const [file, patch] of Object.entries(files)) {
   const p = resolve(root, file);
@@ -38,12 +40,6 @@ for (const [file, patch] of Object.entries(files)) {
   }
   writeFileSync(p, after);
 }
-// 让 Cargo.lock 里的自身版本跟上（离线，不动其它依赖）；metadata 输出很大，直接丢弃，避免撑爆 execSync 缓冲
-execSync("cargo metadata --offline --format-version 1", {
-  cwd: resolve(root, "src-tauri"),
-  stdio: ["ignore", "ignore", "inherit"],
-});
-
 // CHANGELOG：把「未发布」小节变成本版条目；「未发布」为空则按上次标签以来的提交自动归类
 const changelogPath = resolve(root, "CHANGELOG.md");
 const changelog = readFileSync(changelogPath, "utf8");
