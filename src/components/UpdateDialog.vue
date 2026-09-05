@@ -18,11 +18,11 @@ const sizeText = computed(() => {
 });
 
 /**
- * 更新说明来自 GitHub Release 正文（CHANGELOG 本版小节 + "---" + 下载说明）。
- * 只取分隔线之前的部分，并把 markdown 轻量排版：### 小标题、- 条目、去掉反引号。
+ * 更新说明 = GitHub Release 正文 = CHANGELOG 里本版的变更条目，只说改了什么。
+ * 这里把 markdown 轻量排版：### 小标题、- 条目、去掉反引号。
  */
 const notes = computed(() => {
-  const raw = (updater.update?.body ?? "").split(/\n-{3,}\s*\n/)[0].trim();
+  const raw = (updater.update?.body ?? "").trim();
   const blocks: { heading: string; items: string[] }[] = [];
   let cur: { heading: string; items: string[] } | null = null;
   for (const line of raw.split("\n")) {

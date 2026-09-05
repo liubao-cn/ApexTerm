@@ -43,7 +43,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Release 正文 = CHANGELOG 里本版小节（应用内更新弹窗显示的就是它）+ 下载说明
+      # Release 正文 = CHANGELOG 里本版的变更条目；应用内更新弹窗显示的就是它，所以只写改了什么
       - id: notes
         shell: bash
         run: |

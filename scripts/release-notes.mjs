@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// 从 CHANGELOG.md 取出某个版本的小节，供 GitHub Actions 作为 Release 正文（也是应用内更新弹窗显示的内容）。
-// 用法：node scripts/release-notes.mjs 1.0.1   → 标准输出：该版本说明 + 分隔线 + 下载说明
+// 从 CHANGELOG.md 取出某个版本的小节，供 GitHub Actions 作为 Release 正文——它同时就是应用内更新弹窗
+// 显示的内容，所以只放"改了什么"，不放安装说明（Release 页面下方本来就列着安装包）。
+// 用法：node scripts/release-notes.mjs 1.0.1
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -15,7 +16,7 @@ if (!body) {
   console.error(`CHANGELOG.md 里没有 v${version} 的小节`);
   process.exit(1);
 }
-process.stdout.write(`${body}\n\n---\n\n${downloadNotes(version)}\n`);
+process.stdout.write(`${body}\n`);
 
 /** 取 `## v<版本>` 到下一个 `## ` 之间的内容（不含标题） */
 export function sectionOf(md, version) {
@@ -30,16 +31,4 @@ export function sectionOf(md, version) {
     }
   }
   return lines.slice(start + 1, end).join("\n").trim();
-}
-
-function downloadNotes(v) {
-  return [
-    "## 下载",
-    `- macOS Apple Silicon：\`ApexTerm_${v}_aarch64.dmg\``,
-    `- macOS Intel：\`ApexTerm_${v}_x64.dmg\``,
-    `- Windows：\`ApexTerm_${v}_x64-setup.exe\``,
-    "",
-    'macOS 首次打开若提示"无法验证开发者"：右键 → 打开；之后的版本可在应用内自动更新。',
-    "`latest.json` 与 `.sig` 文件供应用内更新器使用，无需手动下载。",
-  ].join("\n");
 }
