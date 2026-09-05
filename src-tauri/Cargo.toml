@@ -1,6 +1,6 @@
 [package]
 name = "apexterm"
-version = "1.0.2"
+version = "1.0.3"
 description = "管理免密 SSH 服务器的桌面程序"
 authors = ["mac"]
 edition = "2021"
