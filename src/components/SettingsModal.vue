@@ -551,7 +551,7 @@ function revealData() {
                 <n-button size="small" secondary :loading="updater.phase === 'checking'" @click="updater.checkForUpdates({ manual: true })">检查更新</n-button>
               </div>
               <div class="toggle" style="margin-top: 14px">
-                <div><b>启动时检查更新</b><div class="muted small">从 GitHub Releases 读取版本信息，有新版本才提示；下载的安装包会校验签名</div></div>
+                <div><b>自动检查更新</b><div class="muted small">启动和回到前台时向 GitHub Releases 读取一个约 4 KB 的版本文件（6 小时内最多一次），不上传任何数据；有新版本只在顶栏亮徽标，不打断操作；安装包会校验签名</div></div>
                 <n-switch :value="p.autoCheckUpdate" @update:value="(v: boolean) => settings.patch({ autoCheckUpdate: v })" />
               </div>
               <p class="muted small" style="margin: 14px 0 0">

@@ -214,6 +214,25 @@ function handleKeydown(e: KeyboardEvent) {
 
 let unlistenMenu: UnlistenFn | null = null;
 let unlistenDrop: UnlistenFn | null = null;
+let stopUpdateSchedule: (() => void) | null = null;
+
+// 「启动时检查更新」开关实时生效：关掉就停止后台调度，打开就立刻开始
+watch(
+  () => settings.prefs.autoCheckUpdate,
+  (on) => {
+    if (import.meta.env.DEV) return;
+    stopUpdateSchedule?.();
+    stopUpdateSchedule = on ? updater.startSchedule() : null;
+  },
+);
+
+// 后台发现新版本：一条不抢焦点的提示，同一版本只提示一次，点过「稍后」的不提示
+watch(
+  () => updater.notifiedVersion,
+  (v) => {
+    if (v) message.info(`发现新版本 ${v}，点顶栏右侧的徽标查看更新说明`, { duration: 6000 });
+  },
+);
 
 /** 拖放坐标（物理像素）命中的终端面板 */
 function paneAt(x: number, y: number): string | null {
@@ -237,10 +256,8 @@ onMounted(async () => {
   // 恢复上次勾选了"自动上传"的联动组
   files.resumeWatchers().catch(() => {});
   if (settings.prefs.probeOnStart) store.probeAllServers();
-  // 启动 5 秒后静默检查一次新版本；dev 构建没有可比对的发布版本，跳过
-  if (settings.prefs.autoCheckUpdate && !import.meta.env.DEV) {
-    setTimeout(() => updater.checkForUpdates({ manual: false }), 5000);
-  }
+  // 后台检查新版本（启动 / 回到前台 / 每小时兜底，6 小时内只请求一次）；dev 构建没有可比对的发布版本，跳过
+  if (settings.prefs.autoCheckUpdate && !import.meta.env.DEV) stopUpdateSchedule = updater.startSchedule();
   window.addEventListener("keydown", handleKeydown);
   unlistenMenu = await listen<string>("menu", (e) => handleMenu(e.payload));
   // 文件拖到终端面板上 → 粘路径；文件管理标签有自己的上传处理（按 active 守卫），这里只管终端标签
@@ -266,6 +283,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleKeydown);
   unlistenMenu?.();
   unlistenDrop?.();
+  stopUpdateSchedule?.();
 });
 </script>
 

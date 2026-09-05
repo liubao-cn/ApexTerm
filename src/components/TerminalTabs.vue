@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { nextTick, ref } from "vue";
 import { NDropdown, NInput, NTooltip, type DropdownOption } from "naive-ui";
-import { Columns2, FolderOpen, LayoutGrid, Palette, Plus, Rows2, Server, TerminalSquare, X } from "lucide-vue-next";
+import { ArrowUpCircle, Columns2, FolderOpen, LayoutGrid, Palette, Plus, RotateCw, Rows2, Server, TerminalSquare, X } from "lucide-vue-next";
 import { useTerminalsStore, type Tab, type TermStatus } from "../stores/terminals";
 import { useSettingsStore } from "../stores/settings";
+import { useUpdaterStore } from "../stores/updater";
 import { appShortcut, isMac, tabIndexLabel } from "../platform";
 
 const terminals = useTerminalsStore();
 const settings = useSettingsStore();
+const updater = useUpdaterStore();
 
 /** 标签整体状态：有面板在连接 → 连接中；全部结束 → 已结束；否则运行中 */
 function tabStatus(t: Tab): TermStatus | "files" {
@@ -210,6 +212,24 @@ function tabDropClass(t: Tab) {
 
     <div class="spacer" data-tauri-drag-region></div>
 
+    <!-- 后台发现新版 / 已装好待重启：只亮一个徽标，不弹窗不抢焦点 -->
+    <button
+      v-if="updater.phase === 'installed'"
+      v-tip="'新版本已安装，重启后生效'"
+      class="update-badge installed"
+      @click="updater.open()"
+    >
+      <RotateCw :size="13" />重启完成更新
+    </button>
+    <button
+      v-else-if="updater.phase === 'available' && updater.update"
+      v-tip="`发现新版本 ${updater.update.version}，点击查看更新说明`"
+      class="update-badge"
+      @click="updater.open()"
+    >
+      <ArrowUpCircle :size="13" />{{ updater.update.version }} 可用
+    </button>
+
     <button v-tip="`终端外观 / 主题 / 字体  ${appShortcut(',')}`" class="tab-add" @click="settings.show('themes')">
       <Palette :size="15" />
     </button>
@@ -385,6 +405,38 @@ function tabDropClass(t: Tab) {
 
 .tab-add {
   padding: 0 7px;
+}
+
+/* 更新徽标：强调色胶囊，和标签同高对齐 */
+.update-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  margin: 0 4px 7px 0;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: default;
+  white-space: nowrap;
+}
+
+.update-badge:hover {
+  border-color: var(--accent);
+}
+
+.update-badge.installed {
+  background: color-mix(in srgb, var(--green) 16%, transparent);
+  color: var(--green-text);
+}
+
+.update-badge.installed:hover {
+  border-color: var(--green);
 }
 
 .spacer {

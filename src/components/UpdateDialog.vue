@@ -28,9 +28,9 @@ const title = computed(() => {
     case "available":
       return `发现新版本 ${updater.update?.version ?? ""}`;
     case "downloading":
-      return "正在下载更新…";
-    case "ready":
-      return "即将重启完成更新";
+      return "正在下载并安装…";
+    case "installed":
+      return `新版本 ${updater.update?.version ?? ""} 已安装，重启后生效`;
     case "latest":
       return "已是最新版本";
     case "error":
@@ -40,8 +40,10 @@ const title = computed(() => {
   }
 });
 
-/** 不可关闭的阶段：下载中 / 准备重启 */
-const busy = computed(() => updater.phase === "downloading" || updater.phase === "ready");
+/** 不可关闭的阶段：下载安装中 */
+const busy = computed(() => updater.phase === "downloading");
+/** 这是终端：重启等于掐断所有会话，两个阶段都要说清楚 */
+const RESTART_WARNING = "重启会关闭所有终端会话和正在运行的命令。";
 </script>
 
 <template>
@@ -73,16 +75,23 @@ const busy = computed(() => updater.phase === "downloading" || updater.phase ===
         <MarkdownLite :source="notes" />
       </div>
       <div v-else-if="updater.phase === 'available'" class="notes muted">这个版本没有附带更新说明。</div>
+      <div v-if="updater.phase === 'available'" class="muted small hint">
+        先下载安装，装好后再选择何时重启。{{ RESTART_WARNING }}
+      </div>
 
-      <div v-if="updater.phase === 'downloading' || updater.phase === 'ready'" class="progress">
+      <div v-if="updater.phase === 'downloading'" class="progress">
         <n-progress
           type="line"
           :percentage="percent ?? 0"
           :indicator-placement="'inside'"
-          :processing="updater.phase === 'downloading'"
+          processing
           :show-indicator="percent !== null"
         />
-        <div class="muted small">{{ updater.phase === 'ready' ? '下载完成，正在安装并重启…' : sizeText }}</div>
+        <div class="muted small">{{ sizeText }}</div>
+      </div>
+
+      <div v-if="updater.phase === 'installed'" class="muted small hint">
+        {{ RESTART_WARNING }}选「稍后重启」可以继续手头的工作，顶栏会保留「重启完成更新」提示，下次启动即为新版本。
       </div>
 
       <div v-if="updater.phase === 'error'" class="error">
@@ -96,8 +105,12 @@ const busy = computed(() => updater.phase === "downloading" || updater.phase ===
         <n-button v-if="updater.phase === 'error'" size="small" secondary @click="openUrl(RELEASES_URL)">前往发布页</n-button>
         <span class="spacer"></span>
         <template v-if="updater.phase === 'available'">
-          <n-button size="small" quaternary @click="updater.dismiss()">稍后</n-button>
-          <n-button size="small" type="primary" @click="updater.install()">下载并重启</n-button>
+          <n-button size="small" quaternary @click="updater.snooze()">稍后</n-button>
+          <n-button size="small" type="primary" @click="updater.install()">下载并安装</n-button>
+        </template>
+        <template v-else-if="updater.phase === 'installed'">
+          <n-button size="small" quaternary @click="updater.dismiss()">稍后重启</n-button>
+          <n-button size="small" type="primary" @click="updater.restart()">立即重启</n-button>
         </template>
         <template v-else-if="updater.phase === 'error'">
           <n-button size="small" quaternary @click="updater.dismiss()">关闭</n-button>
@@ -138,7 +151,8 @@ const busy = computed(() => updater.phase === "downloading" || updater.phase ===
   flex: none;
 }
 
-.icon.latest {
+.icon.latest,
+.icon.installed {
   background: color-mix(in srgb, var(--green) 16%, transparent);
   color: var(--green-text);
 }
@@ -166,6 +180,11 @@ const busy = computed(() => updater.phase === "downloading" || updater.phase ===
   padding: 10px 12px;
   border-radius: 8px;
   background: var(--hover-1);
+}
+
+.hint {
+  margin-top: 12px;
+  line-height: 1.55;
 }
 
 .progress {
