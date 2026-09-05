@@ -61,6 +61,8 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 通用包（Apple Silicon + Intel）：`rustup target add x86_64-apple-darwin` 后 `pnpm tauri build --target universal-apple-darwin`。
 
+本地打包会同时生成更新器用的 `.app.tar.gz` 并要求签名：设置 `TAURI_SIGNING_PRIVATE_KEY`（私钥内容）与 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 后再 `pnpm tauri build`；只想得到 `.app` 试跑可忽略最后的签名报错。正式发布走 GitHub Actions，见下。
+
 ### Windows
 
 1. 安装 [Rust](https://rustup.rs)、Node、pnpm 与 Visual Studio C++ 生成工具（Tauri 前置要求）。
