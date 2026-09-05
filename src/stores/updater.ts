@@ -1,4 +1,4 @@
-import { ref } from "vue";
+import { markRaw, ref, shallowRef } from "vue";
 import { defineStore } from "pinia";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -16,7 +16,12 @@ export const RELEASES_URL = `${HOMEPAGE_URL}/releases`;
 export const useUpdaterStore = defineStore("updater", () => {
   const phase = ref<UpdatePhase>("idle");
   const show = ref(false);
-  const update = ref<Update | null>(null);
+  /**
+   * 插件的 Update 类用了 JS 私有字段（#rid），不能被 Vue 包成响应式 Proxy——否则调用
+   * downloadAndInstall 时会抛 "Cannot read private member from an object whose class did not declare it"。
+   * 用 shallowRef 持有，并 markRaw 防止被别处的 reactive 再包一层。
+   */
+  const update = shallowRef<Update | null>(null);
   const error = ref("");
   const downloaded = ref(0);
   const total = ref<number | null>(null);
@@ -35,7 +40,7 @@ export const useUpdaterStore = defineStore("updater", () => {
     try {
       const u = await check({ timeout: 15_000 });
       if (u) {
-        update.value = u;
+        update.value = markRaw(u);
         phase.value = "available";
         show.value = true;
       } else {
