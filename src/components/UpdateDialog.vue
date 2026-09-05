@@ -17,6 +17,32 @@ const sizeText = computed(() => {
   return updater.total ? `${mb(updater.downloaded)} / ${mb(updater.total)}` : mb(updater.downloaded);
 });
 
+/**
+ * 更新说明来自 GitHub Release 正文（CHANGELOG 本版小节 + "---" + 下载说明）。
+ * 只取分隔线之前的部分，并把 markdown 轻量排版：### 小标题、- 条目、去掉反引号。
+ */
+const notes = computed(() => {
+  const raw = (updater.update?.body ?? "").split(/\n-{3,}\s*\n/)[0].trim();
+  const blocks: { heading: string; items: string[] }[] = [];
+  let cur: { heading: string; items: string[] } | null = null;
+  for (const line of raw.split("\n")) {
+    const t = line.trim().replace(/`/g, "");
+    if (!t) continue;
+    const h = t.match(/^#{1,6}\s+(.+)$/);
+    if (h) {
+      cur = { heading: h[1], items: [] };
+      blocks.push(cur);
+      continue;
+    }
+    if (!cur) {
+      cur = { heading: "", items: [] };
+      blocks.push(cur);
+    }
+    cur.items.push(t.replace(/^[-*]\s+/, ""));
+  }
+  return blocks;
+});
+
 const title = computed(() => {
   switch (updater.phase) {
     case "checking":
@@ -65,7 +91,14 @@ const busy = computed(() => updater.phase === "downloading" || updater.phase ===
         </div>
       </div>
 
-      <div v-if="updater.phase === 'available' && updater.update?.body" class="notes">{{ updater.update.body }}</div>
+      <div v-if="updater.phase === 'available' && notes.length" class="notes">
+        <div v-for="(b, i) in notes" :key="i" class="notes-block">
+          <div v-if="b.heading" class="notes-heading">{{ b.heading }}</div>
+          <ul class="notes-list">
+            <li v-for="(item, j) in b.items" :key="j">{{ item }}</li>
+          </ul>
+        </div>
+      </div>
       <div v-else-if="updater.phase === 'available'" class="notes muted">这个版本没有附带更新说明。</div>
 
       <div v-if="updater.phase === 'downloading' || updater.phase === 'ready'" class="progress">
@@ -162,8 +195,26 @@ const busy = computed(() => updater.phase === "downloading" || updater.phase ===
   background: var(--hover-1);
   font-size: 12.5px;
   line-height: 1.55;
-  white-space: pre-wrap;
   word-break: break-word;
+}
+
+.notes-block + .notes-block {
+  margin-top: 10px;
+}
+
+.notes-heading {
+  font-weight: 600;
+  color: var(--text-2);
+  margin-bottom: 4px;
+}
+
+.notes-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.notes-list li + li {
+  margin-top: 3px;
 }
 
 .progress {

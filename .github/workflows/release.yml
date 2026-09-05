@@ -43,6 +43,17 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Release 正文 = CHANGELOG 里本版小节（应用内更新弹窗显示的就是它）+ 下载说明
+      - id: notes
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          {
+            echo 'body<<NOTES_EOF'
+            node scripts/release-notes.mjs "$VERSION"
+            echo 'NOTES_EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -51,14 +62,7 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: ApexTerm v__VERSION__
-          releaseBody: |
-            ## 下载
-            - macOS Apple Silicon：`ApexTerm___VERSION___aarch64.dmg`
-            - macOS Intel：`ApexTerm___VERSION___x64.dmg`
-            - Windows：`ApexTerm___VERSION___x64-setup.exe`
-
-            macOS 首次打开若提示"无法验证开发者"：右键 → 打开；之后的版本可在应用内自动更新。
-            `latest.json` 与 `.sig` 文件供应用内更新器使用，无需手动下载。
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
