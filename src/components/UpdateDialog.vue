@@ -4,6 +4,7 @@ import { NButton, NModal, NProgress, NSpin } from "naive-ui";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ArrowUpCircle, CheckCircle2, CircleAlert } from "lucide-vue-next";
 import { RELEASES_URL, useUpdaterStore } from "../stores/updater";
+import MarkdownLite from "./MarkdownLite.vue";
 
 const updater = useUpdaterStore();
 
@@ -17,31 +18,8 @@ const sizeText = computed(() => {
   return updater.total ? `${mb(updater.downloaded)} / ${mb(updater.total)}` : mb(updater.downloaded);
 });
 
-/**
- * 更新说明 = GitHub Release 正文 = CHANGELOG 里本版的变更条目，只说改了什么。
- * 这里把 markdown 轻量排版：### 小标题、- 条目、去掉反引号。
- */
-const notes = computed(() => {
-  const raw = (updater.update?.body ?? "").trim();
-  const blocks: { heading: string; items: string[] }[] = [];
-  let cur: { heading: string; items: string[] } | null = null;
-  for (const line of raw.split("\n")) {
-    const t = line.trim().replace(/`/g, "");
-    if (!t) continue;
-    const h = t.match(/^#{1,6}\s+(.+)$/);
-    if (h) {
-      cur = { heading: h[1], items: [] };
-      blocks.push(cur);
-      continue;
-    }
-    if (!cur) {
-      cur = { heading: "", items: [] };
-      blocks.push(cur);
-    }
-    cur.items.push(t.replace(/^[-*]\s+/, ""));
-  }
-  return blocks;
-});
+/** 更新说明 = GitHub Release 正文 = CHANGELOG 里本版的变更条目（Markdown），交给 MarkdownLite 渲染 */
+const notes = computed(() => (updater.update?.body ?? "").trim());
 
 const title = computed(() => {
   switch (updater.phase) {
@@ -91,13 +69,8 @@ const busy = computed(() => updater.phase === "downloading" || updater.phase ===
         </div>
       </div>
 
-      <div v-if="updater.phase === 'available' && notes.length" class="notes">
-        <div v-for="(b, i) in notes" :key="i" class="notes-block">
-          <div v-if="b.heading" class="notes-heading">{{ b.heading }}</div>
-          <ul class="notes-list">
-            <li v-for="(item, j) in b.items" :key="j">{{ item }}</li>
-          </ul>
-        </div>
+      <div v-if="updater.phase === 'available' && notes" class="notes">
+        <MarkdownLite :source="notes" />
       </div>
       <div v-else-if="updater.phase === 'available'" class="notes muted">这个版本没有附带更新说明。</div>
 
@@ -193,28 +166,6 @@ const busy = computed(() => updater.phase === "downloading" || updater.phase ===
   padding: 10px 12px;
   border-radius: 8px;
   background: var(--hover-1);
-  font-size: 12.5px;
-  line-height: 1.55;
-  word-break: break-word;
-}
-
-.notes-block + .notes-block {
-  margin-top: 10px;
-}
-
-.notes-heading {
-  font-weight: 600;
-  color: var(--text-2);
-  margin-bottom: 4px;
-}
-
-.notes-list {
-  margin: 0;
-  padding-left: 18px;
-}
-
-.notes-list li + li {
-  margin-top: 3px;
 }
 
 .progress {
