@@ -11,7 +11,27 @@ permissions:
   contents: write
 
 jobs:
+  # 门禁：类型检查 + 前端单测 + Rust 单测，任一失败不发布
+  check:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
+
   build:
+    needs: check
     strategy:
       fail-fast: false
       matrix:

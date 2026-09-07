@@ -351,23 +351,23 @@ mod tests {
 
     #[test]
     fn rejects_bad_alias() {
-        assert!(build_command(&ssh("-oProxyCommand=x", None), "xterm-256color").is_err());
-        assert!(build_command(&ssh("a b", None), "xterm-256color").is_err());
-        assert!(build_command(&ssh("", None), "xterm-256color").is_err());
-        assert!(build_command(&ssh("prod-web", None), "xterm-256color").is_ok());
-        assert!(build_command(&TerminalTarget::Local { cwd: None }, "xterm-256color").is_ok());
+        assert!(build_command(&ssh("-oProxyCommand=x", None), "xterm-256color", "apexterm").is_err());
+        assert!(build_command(&ssh("a b", None), "xterm-256color", "apexterm").is_err());
+        assert!(build_command(&ssh("", None), "xterm-256color", "apexterm").is_err());
+        assert!(build_command(&ssh("prod-web", None), "xterm-256color", "apexterm").is_ok());
+        assert!(build_command(&TerminalTarget::Local { cwd: None }, "xterm-256color", "apexterm").is_ok());
     }
 
     #[test]
     fn initial_command_is_wrapped_with_login_shell() {
-        let cmd = build_command(&ssh("prod", Some("df -h")), "xterm-256color").unwrap();
+        let cmd = build_command(&ssh("prod", Some("df -h")), "xterm-256color", "apexterm").unwrap();
         let args: Vec<String> = cmd
             .get_argv()
             .iter()
             .map(|a| a.to_string_lossy().into_owned())
             .collect();
         assert_eq!(args[1..], ["-t", "--", "prod", "df -h; exec \"${SHELL:-/bin/sh}\" -l"]);
-        let plain = build_command(&ssh("prod", Some("  ")), "xterm-256color").unwrap();
+        let plain = build_command(&ssh("prod", Some("  ")), "xterm-256color", "apexterm").unwrap();
         assert_eq!(plain.get_argv().len(), 3);
     }
 }
