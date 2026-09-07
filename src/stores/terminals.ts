@@ -24,6 +24,8 @@ export interface TermSession {
   generation: number;
   /** 连上（收到第一个字节）后原样写入终端的内容，用一次即清空；要执行请自带 \r */
   initialInput?: string | null;
+  /** 这个面板临时指定的配色（预设 id）；不设则用主机配色，再退到全局 */
+  themeId?: string | null;
 }
 
 /** 分屏布局树：叶子是一个终端面板，split 节点按 ratio 分给左/上 (a) 和右/下 (b) */

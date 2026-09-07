@@ -189,6 +189,8 @@ export interface HostMeta {
   consoleUrl: string | null;
   folderPairs: FolderPair[];
   sftpCompression: boolean;
+  /** 这台主机的终端配色（预设 id）；null = 跟随全局 */
+  themeId: string | null;
 }
 
 export interface StoredSnippet {
@@ -499,6 +501,7 @@ export const emptyHostMeta = (): HostMeta => ({
   consoleUrl: null,
   folderPairs: [],
   sftpCompression: false,
+  themeId: null,
 });
 
 export const emptyMeta = (): Meta => ({

@@ -33,6 +33,7 @@ import { useTerminalsStore } from "../stores/terminals";
 import { useCommandsStore } from "../stores/commands";
 import { KIND_LABEL, errorText, sshCommand, type HostEntry } from "../api";
 import { debounce } from "../utils";
+import { THEME_FAMILIES } from "../themeCatalog";
 import QuickCommandsMenu from "./QuickCommandsMenu.vue";
 import CloudPowerCard from "./CloudPowerCard.vue";
 
@@ -103,6 +104,8 @@ const kindIcon = computed(() =>
 const group = ref<string | null>(null);
 const tags = ref<string[]>([]);
 const note = ref("");
+/** 这台主机的终端配色；null = 跟随全局。连它的每个面板都用这个（面板右键可临时改） */
+const themeId = ref<string | null>(null);
 const saveState = ref<"idle" | "dirty" | "saving" | "saved" | "error">("idle");
 let hydrating = false;
 
@@ -112,6 +115,7 @@ function hydrate() {
   group.value = m.group;
   tags.value = [...m.tags];
   note.value = m.note;
+  themeId.value = m.themeId;
   saveState.value = "idle";
   queueMicrotask(() => (hydrating = false));
 }
@@ -125,6 +129,7 @@ const persist = debounce(async () => {
       group: group.value?.trim() || null,
       tags: tags.value.map((t) => t.trim()).filter(Boolean),
       note: note.value,
+      themeId: themeId.value,
     });
     saveState.value = "saved";
   } catch (e) {
@@ -133,7 +138,7 @@ const persist = debounce(async () => {
   }
 }, 500);
 
-watch([group, tags, note], () => {
+watch([group, tags, note, themeId], () => {
   if (hydrating) return;
   saveState.value = "dirty";
   persist();
@@ -142,6 +147,14 @@ watch([group, tags, note], () => {
 const groupOptions = computed(() =>
   store.groups.map((g) => ({ label: g, value: g })),
 );
+
+/** 精选配色按家族分组；生产机红底、测试机绿底这类区分靠它 */
+const themeOptions = THEME_FAMILIES.map((f) => ({
+  type: "group" as const,
+  label: f.name,
+  key: f.name,
+  children: f.variants.map((v) => ({ label: f.variants.length === 1 ? f.name : `${f.name} · ${v.label}`, value: v.id })),
+}));
 
 const saveStateText = computed(
   () =>
@@ -361,7 +374,19 @@ function keyInfo(path: string) {
               placeholder="用途、注意事项、负责人…"
               :autosize="{ minRows: 2, maxRows: 8 }"
             />
+            <label>终端配色</label>
+            <n-select
+              v-model:value="themeId"
+              filterable
+              clearable
+              size="small"
+              :options="themeOptions"
+              placeholder="跟随全局设置"
+            />
           </div>
+          <p class="hint" style="margin: 8px 0 0">
+            连这台主机的每个终端面板都用这个配色，例如生产机用红底一眼分清；面板右键「此面板配色」可临时覆盖。
+          </p>
         </section>
 
         <section class="card">

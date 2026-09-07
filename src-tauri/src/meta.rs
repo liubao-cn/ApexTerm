@@ -73,6 +73,8 @@ pub struct HostMeta {
     pub folder_pairs: Vec<FolderPair>,
     /// 文件传输是否启用 ssh 压缩
     pub sftp_compression: bool,
+    /// 这台主机的终端配色（预设 id）；None = 跟随全局
+    pub theme_id: Option<String>,
 }
 
 /// 用户自定义的快捷命令（内置命令在前端定义，这里只存自定义项和被隐藏的内置项 id）

@@ -148,6 +148,20 @@ export const useSettingsStore = defineStore("settings", () => {
     }),
   );
 
+  /** 某个预设 id 的原始配色；null / 未知 id 回到全局当前配色（面板 / 主机级覆盖用） */
+  function themeFor(id: string | null | undefined): TermTheme {
+    return id && id !== "custom" ? presetById(id).theme : theme.value;
+  }
+
+  /** 某个预设 id 交给 xterm 的最终配色，可读性增强 / 光标跟随等仍按全局设置 */
+  function xtermThemeFor(id: string | null | undefined) {
+    if (!id || id === "custom") return xtermTheme.value;
+    return toXtermTheme(themeFor(id), {
+      cursorFollowsForeground: prefs.value.cursorFollowsForeground,
+      boostReadability: prefs.value.boostReadability,
+    });
+  }
+
   /** 当前基于哪个预设（custom 时记住来源，用于显示） */
   const baseThemeId = ref(prefs.value.themeId === "custom" ? DEFAULT_THEME_ID : prefs.value.themeId);
 
@@ -236,6 +250,8 @@ export const useSettingsStore = defineStore("settings", () => {
     appDark,
     theme,
     xtermTheme,
+    themeFor,
+    xtermThemeFor,
     baseThemeId,
     setPreset,
     setColor,

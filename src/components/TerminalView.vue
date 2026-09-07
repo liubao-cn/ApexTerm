@@ -24,6 +24,8 @@ import { attach, beep, createRuntime, detach, getRuntime, type TermRuntime } fro
 import { appShortcut, isTabModifier } from "../platform";
 import { useQuickCommands } from "../quickCommands";
 import { useShortcutsStore } from "../stores/shortcuts";
+import { presetById } from "../themes";
+import { THEME_FAMILIES } from "../themeCatalog";
 import SplitMenu from "./SplitMenu.vue";
 
 const props = defineProps<{ session: TermSession; active: boolean }>();
@@ -39,6 +41,44 @@ const host = computed(() =>
 );
 const sessionRef = toRef(props, "session");
 const quick = useQuickCommands(host, sessionRef);
+
+// ---- 面板配色：面板临时 > 主机固定 > 全局 ----
+const hostThemeId = computed(() => (host.value ? hosts.metaOf(host.value.id).themeId : null));
+const themeSource = computed<"pane" | "host" | "global">(() =>
+  props.session.themeId ? "pane" : hostThemeId.value ? "host" : "global",
+);
+const effectiveThemeId = computed(() => props.session.themeId ?? hostThemeId.value ?? null);
+const paneXtermTheme = computed(() => settings.xtermThemeFor(effectiveThemeId.value));
+const paneBackground = computed(() => settings.themeFor(effectiveThemeId.value).background);
+const themeTip = computed(() => {
+  const id = effectiveThemeId.value;
+  const name = id ? presetById(id).name : settings.prefs.themeId === "custom" ? "自定义" : presetById(settings.prefs.themeId).name;
+  const from = themeSource.value === "pane" ? "此面板" : themeSource.value === "host" ? "此主机" : "全局";
+  return `配色：${name}（${from}）`;
+});
+
+/** 右键菜单「配色」子菜单：精选家族；多变体的家族再套一层 */
+const themeMenu = computed<DropdownOption[]>(() => {
+  const cur = props.session.themeId ?? null;
+  const mark = (id: string | null, label: string) => (cur === id ? `✓ ${label}` : label);
+  const items: DropdownOption[] = [
+    { key: "theme:", label: mark(null, hostThemeId.value ? "跟随主机设置" : "跟随全局设置") },
+    { type: "divider", key: "theme-d" },
+  ];
+  for (const f of THEME_FAMILIES) {
+    if (f.variants.length === 1) {
+      items.push({ key: `theme:${f.variants[0].id}`, label: mark(f.variants[0].id, f.name) });
+    } else {
+      const active = f.variants.some((v) => v.id === cur);
+      items.push({
+        key: `theme-fam:${f.name}`,
+        label: active ? `✓ ${f.name}` : f.name,
+        children: f.variants.map((v) => ({ key: `theme:${v.id}`, label: mark(v.id, v.label) })),
+      });
+    }
+  }
+  return items;
+});
 
 const container = ref<HTMLDivElement | null>(null);
 const searchOpen = ref(false);
@@ -239,6 +279,7 @@ const ctxOptions = computed<DropdownOption[]>(() => {
     out.push({ key: "qc", label: "快捷命令", children: quick.groupOptions.value });
   }
   out.push({ type: "divider", key: "d4" });
+  out.push({ key: "theme-menu", label: "此面板配色", children: themeMenu.value });
   out.push({ key: "appearance", label: `终端外观 / 主题…  ${appShortcut(",")}` });
   out.push({ key: "reconnect", label: "重新连接", disabled: props.session.status === "connecting" });
   out.push({ key: "close", label: `关闭面板  ${appShortcut("w")}` });
@@ -258,6 +299,10 @@ function onContextMenu(e: MouseEvent) {
 
 function onCtxSelect(key: string) {
   ctx.value.show = false;
+  if (key.startsWith("theme:")) {
+    store.update(props.session.id, { themeId: key.slice("theme:".length) || null });
+    return;
+  }
   switch (key) {
     case "copy":
       return copySelection();
@@ -430,7 +475,7 @@ onMounted(() => {
   const fresh = !existing;
   rt =
     existing ??
-    createRuntime(props.session.id, { ...settings.prefs, theme: settings.xtermTheme });
+    createRuntime(props.session.id, { ...settings.prefs, theme: paneXtermTheme.value });
   attach(rt, container.value!);
   rt.ui.toggleSearch = toggleSearch;
   rt.ui.pastePaths = pastePaths;
@@ -494,7 +539,7 @@ watch(
 );
 
 watch(
-  () => [settings.prefs, settings.xtermTheme] as const,
+  () => [settings.prefs, paneXtermTheme.value] as const,
   ([ap, th]) => {
     if (!rt) return;
     rt.term.options.fontFamily = ap.fontFamily;
@@ -539,7 +584,7 @@ onBeforeUnmount(() => {
     class="term-wrap"
     :class="{ 'drop-hover': store.dropHoverSessionId === session.id, 'drag-source': isDragSource }"
     :data-session-id="session.id"
-    :style="{ background: settings.theme.background }"
+    :style="{ background: paneBackground }"
     @contextmenu="onContextMenu"
   >
     <!-- 面板头：主机、状态、快捷命令、分屏、关闭；分屏时按住可拖动换位置 -->
@@ -559,7 +604,7 @@ onBeforeUnmount(() => {
       <span
         v-else
         class="pane-title"
-        v-tip="multiPane ? '双击重命名 · 按住拖动可换位置 / 插到另一面板某一侧' : '双击重命名'"
+        v-tip="`${multiPane ? '双击重命名 · 按住拖动可换位置 / 插到另一面板某一侧' : '双击重命名'}\n${themeTip}`"
         @dblclick="startRename"
       >{{ session.title }}</span>
       <span class="pane-status" :class="session.status">
