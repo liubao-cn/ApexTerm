@@ -496,6 +496,8 @@ onMounted(() => {
       return true;
     });
     rt.term.onData((d) => {
+      // 输入法收尾时 xterm 偶尔会发出空串，没必要跨进程写一次空数据
+      if (!d) return;
       if (rt.reconnectTimer) {
         cancelAutoReconnect();
         return;

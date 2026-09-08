@@ -96,7 +96,9 @@ const RESTART_WARNING = "重启会关闭所有终端会话和正在运行的命�
 
       <div v-if="updater.phase === 'error'" class="error">
         <div class="mono small selectable">{{ updater.error }}</div>
-        <div class="muted small" style="margin-top: 6px">可以稍后重试，或到发布页手动下载安装包。</div>
+        <div class="muted small" style="margin-top: 6px">
+          {{ /download|403|timed? ?out|network|dns|connect/i.test(updater.error) ? "多为网络或代理问题（安装包从 GitHub 下载）：" : "" }}可以稍后重试，或到发布页手动下载安装包。
+        </div>
       </div>
 
       <div v-if="updater.phase === 'latest'" class="muted small">当前已是最新版本，无需更新。</div>

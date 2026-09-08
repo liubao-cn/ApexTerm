@@ -7,6 +7,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { api } from "./api";
 import { hideTip, showTipAt } from "./tooltip";
+import { xtermAlreadyHandled } from "./imeInsert";
 
 /**
  * 终端运行时：xterm 实例 + pty 连接状态。按会话 id 登记，独立于 Vue 组件的挂载/卸载，
@@ -148,17 +149,21 @@ export function createRuntime(sessionId: string, opts: CreateOptions): TermRunti
  * WebKit 的事件顺序是 input(insertText) → keydown(keyCode 229)，而 xterm 在 Shift 的 keydown 之后
  * 直到 keyup 之前都认为"正有按键在处理"，会把这条 input 丢掉，于是字符消失。
  * 这里在 xterm 自己的 input 监听之后再监听一次：xterm 没发出数据的 insertText 由我们补发。
+ *
+ * 判断"xterm 已经发过"不能靠 beforeinput 重置标志：空格这类键 xterm 在 keypress 阶段就发了数据，
+ * 之后 WebKit 仍会派发 beforeinput/input，标志被重置就会补发第二个空格。改为按时间判断（见 imeInsert.ts）。
  */
 function fixImeDirectInsert(term: Terminal) {
   const ta = term.textarea;
   if (!ta) return;
-  let sentDuringInput = false;
-  term.onData(() => (sentDuringInput = true));
-  ta.addEventListener("beforeinput", () => (sentDuringInput = false));
+  let lastKeydownAt = 0;
+  let lastSentAt = -Infinity;
+  term.onData(() => (lastSentAt = performance.now()));
+  ta.addEventListener("keydown", () => (lastKeydownAt = performance.now()));
   ta.addEventListener("input", (e) => {
     const ev = e as InputEvent;
-    if (ev.inputType !== "insertText" || !ev.data || ev.isComposing || sentDuringInput) return;
-    term.input(ev.data, true);
+    if (ev.inputType !== "insertText" || !ev.data || ev.isComposing) return;
+    if (!xtermAlreadyHandled(lastSentAt, lastKeydownAt, performance.now())) term.input(ev.data, true);
   });
 }
 
