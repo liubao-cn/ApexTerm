@@ -21,7 +21,7 @@ import { useTerminalsStore, type DropSide, type DropZone, type TermSession } fro
 import { useHostsStore } from "../stores/hosts";
 import { useSettingsStore } from "../stores/settings";
 import { attach, beep, createRuntime, detach, getRuntime, type TermRuntime } from "../terminalRegistry";
-import { appShortcut, isTabModifier } from "../platform";
+import { appShortcut, isMac, isTabModifier } from "../platform";
 import { useQuickCommands } from "../quickCommands";
 import { useShortcutsStore } from "../stores/shortcuts";
 import { presetById } from "../themes";
@@ -258,10 +258,20 @@ function onDomPaste(e: ClipboardEvent) {
 
 // ---- 右键菜单 ----
 const ctx = ref({ show: false, x: 0, y: 0 });
-const ctxOptions = computed<DropdownOption[]>(() => {
+/**
+ * 菜单项在每次打开时重新计算：hasSelection() 不是响应式数据，放在 computed 里会被缓存，
+ * 于是明明选中了文字，右键还显示"复制（未选中）"。
+ */
+const ctxOptions = ref<DropdownOption[]>([]);
+function buildCtxOptions(): DropdownOption[] {
   const hasSel = rt?.term.hasSelection() ?? false;
+  // TUI（Devin CLI、vim 等）开启鼠标捕获后，拖动会被程序拿走而不是选中文本；xterm 在 mac 上按住 ⌥、其它平台按住 Shift 可强制选中
+  const mouseCaptured = (rt?.term.modes.mouseTrackingMode ?? "none") !== "none";
   const out: DropdownOption[] = [
     { key: "copy", label: hasSel ? "复制" : "复制（未选中）", disabled: !hasSel },
+    ...(!hasSel && mouseCaptured
+      ? [{ key: "hint-mouse", label: `程序接管了鼠标：按住 ${isMac ? "⌥" : "Shift"} 拖动即可选中文本`, disabled: true }]
+      : []),
     ...(hasSel && settings.prefs.copyReflow ? [{ key: "copy-raw", label: "复制（保留换行）" }] : []),
     { key: "paste", label: "粘贴" },
     { key: "select-all", label: "全选" },
@@ -284,7 +294,7 @@ const ctxOptions = computed<DropdownOption[]>(() => {
   out.push({ key: "reconnect", label: "重新连接", disabled: props.session.status === "connecting" });
   out.push({ key: "close", label: `关闭面板  ${appShortcut("w")}` });
   return out;
-});
+}
 
 function onContextMenu(e: MouseEvent) {
   e.preventDefault();
@@ -294,6 +304,7 @@ function onContextMenu(e: MouseEvent) {
     else pasteClipboard();
     return;
   }
+  ctxOptions.value = buildCtxOptions();
   ctx.value = { show: true, x: e.clientX, y: e.clientY };
 }
 
