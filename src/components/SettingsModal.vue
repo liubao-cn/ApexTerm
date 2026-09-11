@@ -292,6 +292,10 @@ function revealData() {
                 </div>
                 <n-select :value="p.termProgram" :options="termProgramOptions" size="small" style="max-width: 220px" @update:value="(v: TermProgram) => settings.patch({ termProgram: v })" />
               </div>
+              <div class="toggle">
+                <div><b>还原 file:// 链接里的中文</b><div class="muted small">程序按 URL 规范把中文路径打印成 %E5%B7%A5 这类编码，显示时还原成可读文字；只改显示不改数据，vim / less 等全屏程序里不处理</div></div>
+                <n-switch :value="p.decodeFileUrls" size="small" @update:value="(v: boolean) => settings.patch({ decodeFileUrls: v })" />
+              </div>
             </section>
 
             <section class="card">

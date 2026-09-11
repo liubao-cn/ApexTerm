@@ -8,6 +8,7 @@ import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { api } from "./api";
 import { hideTip, showTipAt } from "./tooltip";
 import { xtermAlreadyHandled } from "./imeInsert";
+import { createFileUrlDecoder, type StreamDecoder } from "./outputFilters";
 
 /**
  * 终端运行时：xterm 实例 + pty 连接状态。按会话 id 登记，独立于 Vue 组件的挂载/卸载，
@@ -27,6 +28,11 @@ export interface TermRuntime {
   reconnectTimer: number | null;
   /** 组件层挂上来的 UI 回调（查找框、拖放路径、重命名等） */
   ui: { toggleSearch?: () => void; pastePaths?: (paths: string[]) => void; rename?: () => void };
+  /** pty 字节流 → 文本（跨块的半个 UTF-8 字符由它接住） */
+  textDecoder: TextDecoder;
+  /** 显示过滤：file:// 链接的百分号编码还原；结尾半截 URL 暂留 */
+  urlDecoder: StreamDecoder;
+  urlFlushTimer: number | null;
 }
 
 /** 短促的提示音（BEL），用 WebAudio 合成，不依赖音频文件 */
@@ -139,9 +145,46 @@ export function createRuntime(sessionId: string, opts: CreateOptions): TermRunti
     reconnectAttempts: 0,
     reconnectTimer: null,
     ui: {},
+    textDecoder: new TextDecoder("utf-8"),
+    urlDecoder: createFileUrlDecoder(),
+    urlFlushTimer: null,
   };
   runtimes.set(sessionId, rt);
   return rt;
+}
+
+/**
+ * 把 pty 送来的一段字节写进终端。
+ * 开了「还原 file:// 链接里的中文」且不在全屏程序（备用缓冲区）里时，走显示过滤；
+ * 结尾若停在半截 URL 上先暂留，40ms 内没有后续数据就原样放行。
+ */
+export function writeOutput(rt: TermRuntime, bytes: Uint8Array, decodeFileUrls: boolean) {
+  const text = rt.textDecoder.decode(bytes, { stream: true });
+  if (rt.urlFlushTimer !== null) {
+    window.clearTimeout(rt.urlFlushTimer);
+    rt.urlFlushTimer = null;
+  }
+  if (!decodeFileUrls || rt.term.buffer.active.type !== "normal") {
+    const held = rt.urlDecoder.pending ? rt.urlDecoder.flush() : "";
+    rt.term.write(held + text);
+    return;
+  }
+  rt.term.write(rt.urlDecoder.push(text));
+  if (rt.urlDecoder.pending) {
+    rt.urlFlushTimer = window.setTimeout(() => {
+      rt.urlFlushTimer = null;
+      rt.term.write(rt.urlDecoder.flush());
+    }, 40);
+  }
+}
+
+/** 会话结束等时机：把暂留的半截立刻吐出来 */
+export function flushOutput(rt: TermRuntime) {
+  if (rt.urlFlushTimer !== null) {
+    window.clearTimeout(rt.urlFlushTimer);
+    rt.urlFlushTimer = null;
+  }
+  if (rt.urlDecoder.pending) rt.term.write(rt.urlDecoder.flush());
 }
 
 /**

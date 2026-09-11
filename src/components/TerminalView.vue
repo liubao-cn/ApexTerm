@@ -20,7 +20,7 @@ import { reflowSelection } from "../copyReflow";
 import { useTerminalsStore, type DropSide, type DropZone, type TermSession } from "../stores/terminals";
 import { useHostsStore } from "../stores/hosts";
 import { useSettingsStore } from "../stores/settings";
-import { attach, beep, createRuntime, detach, getRuntime, type TermRuntime } from "../terminalRegistry";
+import { attach, beep, createRuntime, detach, flushOutput, getRuntime, writeOutput, type TermRuntime } from "../terminalRegistry";
 import { appShortcut, isMac, isTabModifier } from "../platform";
 import { useQuickCommands } from "../quickCommands";
 import { useShortcutsStore } from "../stores/shortcuts";
@@ -149,8 +149,9 @@ async function connect() {
             }, 250);
           }
         }
-        rt.term.write(base64ToBytes(m.data));
+        writeOutput(rt, base64ToBytes(m.data), settings.prefs.decodeFileUrls);
       } else {
+        flushOutput(rt);
         rt.backendId = null;
         stopConnectClock();
         store.update(sessionId, { status: "exited", exitCode: m.code, backendId: null });

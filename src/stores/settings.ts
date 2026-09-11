@@ -39,6 +39,8 @@ export interface Prefs {
   termType: string;
   /** 对程序自报的终端身份：apexterm 如实；iterm / vscode 兼容名单制的 CLI（如 Devin CLI 只给名单终端发纯超链接） */
   termProgram: TermProgram;
+  /** 显示时把输出里 file:// 链接的百分号编码还原成可读文字（全屏程序不处理） */
+  decodeFileUrls: boolean;
   // ---- 界面 ----
   appTheme: AppTheme;
   tooltipDelay: number;
@@ -84,6 +86,7 @@ export const DEFAULTS: Prefs = {
   autoReconnect: true,
   termType: "xterm-256color",
   termProgram: "apexterm",
+  decodeFileUrls: true,
   appTheme: "dark",
   tooltipDelay: 150,
   probeOnStart: false,
