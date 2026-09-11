@@ -18,7 +18,6 @@ test("非 file:// 的 %XX 不处理；无编码的 file:// 原样", () => {
 test("末尾不完整的多字节序列保留编码，前面完整的照常解码", () => {
   // 工 = E5 B7 A5；作 的前两个字节 E4 BD 缺最后一个
   assert.equal(decodePercentRun("%E5%B7%A5%E4%BD"), "工%E4%BD");
-  // 单独一个续字节：整段保留
   assert.equal(decodePercentRun("%A5"), "%A5");
 });
 
@@ -31,6 +30,33 @@ test("OSC 8 参数里的 URL 也会被解码，但不会吞掉终止符", () => 
   assert.equal(decodeFileUrls(osc), `\x1b]8;;${DEC}\x1b\\放行判定书\x1b]8;;\x1b\\`);
 });
 
+test("程序把 URL 折成多行（换行 + 缩进），续行也一起还原，右括号处结束", () => {
+  // 模拟 Devin 的排版：在 %E4 前折行、在一个字符的三个 %XX 中间再折一次
+  const wrapped =
+    "• 附件 (file:///Users/liubao/AI/%E5%B7%A5%E4%BD%9C\r\n" +
+    "  %E7%AC%94%E8%AE%B0/mka-delivery/%E6%94%BE%E8\r\n" +
+    "  %A1%8C_20260910.md)（两批）\r\n" +
+    "下一步：发群";
+  const out = decodeFileUrls(wrapped);
+  assert.equal(
+    out,
+    "• 附件 (file:///Users/liubao/AI/工作\r\n" +
+      "  笔记/mka-delivery/放\r\n" +
+      "  行_20260910.md)（两批）\r\n" +
+      "下一步：发群",
+  );
+});
+
+test("折行时行尾被切断的半个字符（如 %E）搬到下一行开头再解", () => {
+  const wrapped = "x (file:///a/%E5%B7%A5%E\r\n  4%BD%9C.md) y";
+  assert.equal(decodeFileUrls(wrapped), "x (file:///a/工\r\n  作.md) y");
+});
+
+test("URL 后面换行接的是普通文字（不像 URL 续行）时不当成续行", () => {
+  const text = "see file:///tmp/%E5%B7%A5.txt\r\n下一步：发群 100%";
+  assert.equal(decodeFileUrls(text), "see file:///tmp/工.txt\r\n下一步：发群 100%");
+});
+
 test("流式：URL 被切成两段到达时暂留半截，合并后再解码", () => {
   const d = createFileUrlDecoder();
   const cut = ENC.indexOf("%E4");
@@ -40,6 +66,14 @@ test("流式：URL 被切成两段到达时暂留半截，合并后再解码", (
   const second = d.push(`${ENC.slice(cut)}) 完成\r\n`);
   assert.equal(second, `${DEC}) 完成\r\n`);
   assert.equal(d.pending, false);
+});
+
+test("流式：折行 URL 的续行在下一块数据里也能接上", () => {
+  const d = createFileUrlDecoder();
+  const first = d.push("• 附件 (file:///Users/liubao/AI/%E5%B7%A5%E4%BD%9C\r\n  ");
+  assert.equal(first, "• 附件 (");
+  const second = d.push("%E7%AC%94%E8%AE%B0/a.md) 完成\r\n");
+  assert.equal(second, "file:///Users/liubao/AI/工作\r\n  笔记/a.md) 完成\r\n");
 });
 
 test("流式：没有半截 URL 时全部立刻放行；flush 吐出暂留内容", () => {
