@@ -15,6 +15,10 @@ const TERMINATOR = /[\s()'"<>\x07\x1b]/;
 const SEPARATOR_RE = /^(?:\x1b\[[0-9;]*m|(?:\r\n|\n|\r)[ \t]*)+/;
 /** 续行开头必须像 URL 的一部分 */
 const URL_CHAR = /[A-Za-z0-9%\/._~\-+@:,;=&#!*[\]]/;
+/** 文本末尾只剩一个没收全的 CSI 序列（如 "\x1b[38;2;12"） */
+const INCOMPLETE_ESC_RE = /^\x1b(?:\[[0-9;]*)?$/;
+/** 文本末尾是 "file://" 的前几个字符（前面不是字母，避免把 "profile" 的尾巴当成它） */
+const PARTIAL_SCHEME_RE = /(?:^|[^A-Za-z])(f|fi|fil|file|file:|file:\/)$/;
 /** 暂留的半截 URL 上限，超过就当它不是 URL */
 const HOLD_LIMIT = 2048;
 
@@ -67,10 +71,16 @@ function scanUrl(text: string, start: number): UrlSpan {
     const ch = text[i];
     if (ch !== "\r" && ch !== "\n" && ch !== "\x1b") break;
     const m = SEPARATOR_RE.exec(text.slice(i, i + 256));
-    if (!m) break;
+    if (!m) {
+      // 停在一个还没收全的转义序列上（数据块恰好断在 ␛[38;2;… 中间）：结论未定，交给流式层暂留
+      if (INCOMPLETE_ESC_RE.test(text.slice(i))) return { start, end: i, segments, breaks, open: true };
+      break;
+    }
     const j = i + m[0].length;
-    // 分隔符之后文本就没了：还不知道下一段是不是续行，交给流式层暂留
-    if (j >= text.length) return { start, end: i, segments, breaks, open: true };
+    // 分隔符之后文本就没了、或只剩半截转义序列：还不知道下一段是不是续行，交给流式层暂留
+    if (j >= text.length || INCOMPLETE_ESC_RE.test(text.slice(j))) {
+      return { start, end: i, segments, breaks, open: true };
+    }
     // 只有分隔符后紧跟 URL 字符、且前一段确实有内容时才算续行
     if (!URL_CHAR.test(text[j]) || segments[segments.length - 1].to === from) break;
     breaks.push(m[0]);
@@ -147,12 +157,23 @@ export function createFileUrlDecoder(): StreamDecoder {
     push(chunk) {
       const text = held + chunk;
       held = "";
-      if (!text.includes("file://")) return text;
+      if (!text.includes("file://")) {
+        const partial = PARTIAL_SCHEME_RE.exec(text);
+        if (!partial) return text;
+        held = partial[1];
+        return text.slice(0, text.length - partial[1].length);
+      }
       const spans = findSpans(text);
       const lastSpan = spans[spans.length - 1];
       if (lastSpan?.open && text.length - lastSpan.start < HOLD_LIMIT) {
         held = text.slice(lastSpan.start);
         return decodeFileUrls(text.slice(0, lastSpan.start));
+      }
+      // 数据块恰好断在 "file://" 这几个字符中间：把这半截也留到下一块
+      const partial = PARTIAL_SCHEME_RE.exec(text);
+      if (partial) {
+        held = partial[1];
+        return decodeFileUrls(text.slice(0, text.length - partial[1].length));
       }
       return decodeFileUrls(text);
     },

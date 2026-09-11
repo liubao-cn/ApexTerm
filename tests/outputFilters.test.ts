@@ -92,6 +92,49 @@ test("流式：折行 URL 的续行在下一块数据里也能接上", () => {
   assert.equal(second, "file:///Users/liubao/AI/工作\r\n  笔记/a.md) 完成\r\n");
 });
 
+test("流式：数据块断在折行处的颜色序列中间，也要暂留等下一块（截图里残留 %E4 的根因）", () => {
+  const GRAY = "\x1b[38;2;124;124;124m";
+  const d = createFileUrlDecoder();
+  // 第一块在 "\x1b[38;2;1" 处被切断
+  const first = d.push(`(file:///a/%E4%BE%9B%E6%95%B0%E4\x1b[0m\r\n   \x1b[38;2;1`);
+  assert.equal(first, "(");
+  assert.equal(d.pending, true);
+  const second = d.push(`24;124;124m%BB%BD%E5%B0%B1.html)\x1b[0m\r\n`);
+  assert.equal(second, `file:///a/供数\x1b[0m\r\n   ${GRAY}份就.html)\x1b[0m\r\n`);
+});
+
+test("流式：数据块恰好断在 ESC 前 / 只剩 ESC 时同样暂留", () => {
+  const d = createFileUrlDecoder();
+  assert.equal(d.push("(file:///a/%E4%BE%9B%E4"), "(");
+  assert.equal(d.push("\x1b"), "");
+  assert.equal(d.push("[0m\r\n   \x1b[38;2;124;124;124m%BB%BD.md)"), "file:///a/供\x1b[0m\r\n   \x1b[38;2;124;124;124m份.md)");
+});
+
+test("流式：任意切块方式的结果都与整段解码一致（确定性随机切块 200 次）", () => {
+  const GRAY = "\x1b[38;2;124;124;124m";
+  const sample =
+    `正文 100% 进度 profile 无关\r\n` +
+    `   ${GRAY}• \x1b[0m审查清单：\x1b]8;;${ENC}\x1b\\\x1b[4m审查清单.html\x1b]8;;\x1b\\\x1b[0m${GRAY} (file:///Users/liubao/AI/%E5%B7%A5%E4%BD%9C%E7%AC%94%E8%AE%B0/2026-09-09-\x1b[0m\r\n` +
+    `   ${GRAY}%E4%BB%BB%E5%8A%A1%E7%AE%A1%E7%90%86release/\x1b[0m\r\n` +
+    `   ${GRAY}%E5%AE%A1%E6%9F%A5%E6%B8%85%E5%8D%95.html)\x1b[0m\r\n` +
+    `下一步：发群 (${ENC}) 结束\r\n`;
+  const whole = decodeFileUrls(sample);
+  let seed = 7;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  for (let trial = 0; trial < 200; trial++) {
+    const d = createFileUrlDecoder();
+    const max = trial % 2 ? 6 : 40;
+    let out = "";
+    for (let i = 0; i < sample.length; ) {
+      const n = 1 + Math.floor(rnd() * max);
+      out += d.push(sample.slice(i, i + n));
+      i += n;
+    }
+    out += d.flush();
+    assert.equal(out, whole, `trial ${trial}`);
+  }
+});
+
 test("流式：没有半截 URL 时全部立刻放行；flush 吐出暂留内容", () => {
   const d = createFileUrlDecoder();
   assert.equal(d.push("hello\r\n"), "hello\r\n");
