@@ -147,9 +147,56 @@ test("流式：任意切块方式的结果都与整段解码一致（确定性�
   }
 });
 
-test("流式：没有半截 URL 时全部立刻放行；flush 吐出暂留内容", () => {
+test("流式：每一块到达前都被定时器提前放行（主线程拥堵的最坏情况），结果仍与整段解码一致", () => {
+  const GRAY = "\x1b[38;2;124;124;124m";
+  const sample =
+    `   ${GRAY}• \x1b[0m审查清单：\x1b]8;;${ENC}\x1b\\\x1b[4m审查清单.html\x1b]8;;\x1b\\\x1b[0m${GRAY} (file:///Users/liubao/AI/%E5%B7%A5%E4%BD%9C%E7%AC%94%E8%AE%B0/2026-09-09-\x1b[0m\r\n` +
+    `   ${GRAY}%E4%BB%BB%E5%8A%A1%E7%AE%A1%E7%90%86release/\x1b[0m\r\n` +
+    `   ${GRAY}%E5%AE%A1%E6%9F%A5%E6%B8%85%E5%8D%95.html)\x1b[0m\r\n` +
+    `下一步：发群 (${ENC}) 结束 100%\r\n`;
+  const whole = decodeFileUrls(sample);
+  for (const max of [1, 3, 8, 40]) {
+    let seed = max;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const d = createFileUrlDecoder();
+    let out = "";
+    for (let i = 0; i < sample.length; ) {
+      if (d.pending) out += d.flush();
+      const n = 1 + Math.floor(rnd() * max);
+      out += d.push(sample.slice(i, i + n));
+      i += n;
+    }
+    out += d.flush(true);
+    assert.equal(out, whole, `chunk max ${max}`);
+  }
+});
+
+test("流式：没有半截 URL 时全部立刻放行；flush 先留半个字符，force 才全吐", () => {
   const d = createFileUrlDecoder();
   assert.equal(d.push("hello\r\n"), "hello\r\n");
   d.push("x file:///a/%E5");
-  assert.equal(d.flush(), "file:///a/%E5");
+  assert.equal(d.flush(), "file:///a/");
+  assert.equal(d.pending, true);
+  assert.equal(d.flush(true), "%E5");
+  assert.equal(d.pending, false);
+});
+
+test("流式：暂留被定时器提前放行后，下一块开头的续行仍按 URL 解码，半个字符接回", () => {
+  const GRAY = "\x1b[38;2;124;124;124m";
+  const d = createFileUrlDecoder();
+  const first = d.push(`(file:///a/${encodeURIComponent("供数对接标准汇总版（发这一")}%E4\x1b[0m\r\n   ${GRAY}`);
+  assert.equal(first, "(");
+  // 主线程忙，定时器先放行了暂留（非 force）：半个字符 %E4 连同后面的折行分隔符留着
+  const flushed = d.flush();
+  assert.equal(flushed, "file:///a/供数对接标准汇总版（发这一");
+  assert.equal(d.pending, true);
+  // 续行到达：接上 %E4 一起解出 "份"，分隔符原位输出
+  const second = d.push(`%BB%BD${encodeURIComponent("就够）")}.html)\x1b[0m\r\n下一步`);
+  assert.equal(second, `\x1b[0m\r\n   ${GRAY}份就够）.html)\x1b[0m\r\n下一步`);
+  assert.equal(d.pending, false);
+});
+
+test("单字节的 %20 / %2F 保留编码，只还原多字节字符；坏字节不影响后面的字符", () => {
+  assert.equal(decodePercentRun("%E5%B7%A5%20%E4%BD%9C"), "工%20作");
+  assert.equal(decodePercentRun("%BB%BD%E5%B0%B1"), "%BB%BD就");
 });

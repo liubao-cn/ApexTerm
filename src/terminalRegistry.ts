@@ -153,38 +153,57 @@ export function createRuntime(sessionId: string, opts: CreateOptions): TermRunti
   return rt;
 }
 
-/**
- * 把 pty 送来的一段字节写进终端。
- * 开了「还原 file:// 链接里的中文」且不在全屏程序（备用缓冲区）里时，走显示过滤；
- * 结尾若停在半截 URL 上先暂留，40ms 内没有后续数据就原样放行。
- */
-export function writeOutput(rt: TermRuntime, bytes: Uint8Array, decodeFileUrls: boolean) {
-  const text = rt.textDecoder.decode(bytes, { stream: true });
+/** 暂留的半截 URL 多久没有后续数据就先放行（解不出的半个字符仍留着） */
+const URL_HOLD_MS = 120;
+/** 再过多久连半个字符也放行（真正悬空的输出，比如提示符里就有个半截 URL） */
+const URL_FORCE_FLUSH_MS = 1000;
+
+function clearFlushTimer(rt: TermRuntime) {
   if (rt.urlFlushTimer !== null) {
     window.clearTimeout(rt.urlFlushTimer);
     rt.urlFlushTimer = null;
   }
+}
+
+/**
+ * 两段式放行：先放能显示的部分（解不出的半个字符继续留着等续行），过 1 秒还没有续行再全部放出。
+ * 解码器自己记着"停在 URL 里"的状态，所以即便这里放行早了（主线程忙着 resize 重排），续行到了照样能接上。
+ */
+function scheduleFlush(rt: TermRuntime) {
+  clearFlushTimer(rt);
+  rt.urlFlushTimer = window.setTimeout(() => {
+    rt.urlFlushTimer = null;
+    rt.term.write(rt.urlDecoder.flush());
+    if (rt.urlDecoder.pending) {
+      rt.urlFlushTimer = window.setTimeout(() => {
+        rt.urlFlushTimer = null;
+        rt.term.write(rt.urlDecoder.flush(true));
+      }, URL_FORCE_FLUSH_MS);
+    }
+  }, URL_HOLD_MS);
+}
+
+/**
+ * 把 pty 送来的一段字节写进终端。
+ * 开了「还原 file:// 链接里的中文」且不在全屏程序（备用缓冲区）里时，走显示过滤；
+ * 结尾若停在半截 URL 上先暂留，等后续数据或定时器放行。
+ */
+export function writeOutput(rt: TermRuntime, bytes: Uint8Array, decodeFileUrls: boolean) {
+  const text = rt.textDecoder.decode(bytes, { stream: true });
+  clearFlushTimer(rt);
   if (!decodeFileUrls || rt.term.buffer.active.type !== "normal") {
-    const held = rt.urlDecoder.pending ? rt.urlDecoder.flush() : "";
+    const held = rt.urlDecoder.pending ? rt.urlDecoder.flush(true) : "";
     rt.term.write(held + text);
     return;
   }
   rt.term.write(rt.urlDecoder.push(text));
-  if (rt.urlDecoder.pending) {
-    rt.urlFlushTimer = window.setTimeout(() => {
-      rt.urlFlushTimer = null;
-      rt.term.write(rt.urlDecoder.flush());
-    }, 40);
-  }
+  if (rt.urlDecoder.pending) scheduleFlush(rt);
 }
 
-/** 会话结束等时机：把暂留的半截立刻吐出来 */
+/** 会话结束等时机：把暂留的全部立刻吐出来 */
 export function flushOutput(rt: TermRuntime) {
-  if (rt.urlFlushTimer !== null) {
-    window.clearTimeout(rt.urlFlushTimer);
-    rt.urlFlushTimer = null;
-  }
-  if (rt.urlDecoder.pending) rt.term.write(rt.urlDecoder.flush());
+  clearFlushTimer(rt);
+  if (rt.urlDecoder.pending) rt.term.write(rt.urlDecoder.flush(true));
 }
 
 /**
