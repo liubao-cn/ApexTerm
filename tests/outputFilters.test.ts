@@ -47,6 +47,22 @@ test("程序把 URL 折成多行（换行 + 缩进），续行也一起还原，
   );
 });
 
+test("Devin 实际排版：行尾先重置颜色再换行缩进再设颜色，续行照样还原（原始字节抓包用例）", () => {
+  const GRAY = "\x1b[38;2;124;124;124m";
+  const raw =
+    `${GRAY} (file:///Users/liubao/AI/%E5%B7%A5%E4%BD%9C%E7%AC%94%E8%AE%B0/2026-09-09-\x1b[0m\r\n` +
+    `   ${GRAY}%E4%BB%BB%E5%8A%A1%E7%AE%A1%E7%90%86release%E5%88%86%E6%94%AF%E4%B8%8A%E7%BA%BF%E5%AE%A1%E6%9F%A5/\x1b[0m\r\n` +
+    `   ${GRAY}%E5%AE%A1%E6%9F%A5%E6%B8%85%E5%8D%95.html)\x1b[0m\r\n` +
+    `   ${GRAY}\u2022 \x1b[0m可直接粘贴的转发稿：`;
+  assert.equal(
+    decodeFileUrls(raw),
+    `${GRAY} (file:///Users/liubao/AI/工作笔记/2026-09-09-\x1b[0m\r\n` +
+      `   ${GRAY}任务管理release分支上线审查/\x1b[0m\r\n` +
+      `   ${GRAY}审查清单.html)\x1b[0m\r\n` +
+      `   ${GRAY}\u2022 \x1b[0m可直接粘贴的转发稿：`,
+  );
+});
+
 test("折行时行尾被切断的半个字符（如 %E）搬到下一行开头再解", () => {
   const wrapped = "x (file:///a/%E5%B7%A5%E\r\n  4%BD%9C.md) y";
   assert.equal(decodeFileUrls(wrapped), "x (file:///a/工\r\n  作.md) y");

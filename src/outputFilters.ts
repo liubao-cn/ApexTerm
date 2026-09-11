@@ -8,8 +8,11 @@
 const PERCENT_RUN_RE = /(?:%[0-9A-Fa-f]{2})+/g;
 /** URL 在一行内到此为止的字符 */
 const TERMINATOR = /[\s()'"<>\x07\x1b]/;
-/** 折行：换行 + 可选的 SGR 颜色序列 + 缩进 */
-const LINE_BREAK_RE = /^(?:\r\n|\n|\r)(?:\x1b\[[0-9;]*m)*[ \t]*(?:\x1b\[[0-9;]*m)*/;
+/**
+ * URL 中间可以"透明"跨过的东西：SGR 颜色序列、换行 + 缩进，可连续多个。
+ * Devin 的实际排版是 `…%E5%B7-\e[0m\r\n   \e[38;2;124;124;124m%E4%BB…`：先重置颜色、换行、缩进、再设颜色。
+ */
+const SEPARATOR_RE = /^(?:\x1b\[[0-9;]*m|(?:\r\n|\n|\r)[ \t]*)+/;
 /** 续行开头必须像 URL 的一部分 */
 const URL_CHAR = /[A-Za-z0-9%\/._~\-+@:,;=&#!*[\]]/;
 /** 暂留的半截 URL 上限，超过就当它不是 URL */
@@ -62,13 +65,13 @@ function scanUrl(text: string, start: number): UrlSpan {
     segments.push({ from, to: i });
     if (i >= text.length) return { start, end: i, segments, breaks, open: true };
     const ch = text[i];
-    if (ch !== "\r" && ch !== "\n") break;
-    const m = LINE_BREAK_RE.exec(text.slice(i, i + 64));
+    if (ch !== "\r" && ch !== "\n" && ch !== "\x1b") break;
+    const m = SEPARATOR_RE.exec(text.slice(i, i + 256));
     if (!m) break;
     const j = i + m[0].length;
-    // 换行 + 缩进之后文本就没了：还不知道下一行是不是续行，交给流式层暂留
+    // 分隔符之后文本就没了：还不知道下一段是不是续行，交给流式层暂留
     if (j >= text.length) return { start, end: i, segments, breaks, open: true };
-    // 只有换行后紧跟 URL 字符、且前一段确实有内容时才算续行
+    // 只有分隔符后紧跟 URL 字符、且前一段确实有内容时才算续行
     if (!URL_CHAR.test(text[j]) || segments[segments.length - 1].to === from) break;
     breaks.push(m[0]);
     from = j;
