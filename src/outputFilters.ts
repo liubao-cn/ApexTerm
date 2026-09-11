@@ -9,14 +9,15 @@ const PERCENT_RUN_RE = /(?:%[0-9A-Fa-f]{2})+/g;
 /** URL 在一行内到此为止的字符 */
 const TERMINATOR = /[\s()'"<>\x07\x1b]/;
 /**
- * URL 中间可以"透明"跨过的东西：SGR 颜色序列、换行 + 缩进，可连续多个。
- * Devin 的实际排版是 `…%E5%B7-\e[0m\r\n   \e[38;2;124;124;124m%E4%BB…`：先重置颜色、换行、缩进、再设颜色。
+ * URL 中间可以"透明"跨过的东西：不移动光标的 CSI 序列（SGR 颜色 m、清行 K、清屏 J、模式开关 h/l）、
+ * 换行 + 缩进，可连续多个。Devin 的实际排版是 `…%E5%B7-\e[0m\r\n   \e[38;2;124;124;124m%E4%BB…`，
+ * 行尾有时还带 `\e[K`。光标移动类（A/B/C/D/G/H）不算，那意味着程序在别处画东西。
  */
-const SEPARATOR_RE = /^(?:\x1b\[[0-9;]*m|(?:\r\n|\n|\r)[ \t]*)+/;
+const SEPARATOR_RE = /^(?:\x1b\[[0-9;?]*[mKJhl]|(?:\r\n|\n|\r)[ \t]*)+/;
 /** 续行开头必须像 URL 的一部分 */
 const URL_CHAR = /[A-Za-z0-9%\/._~\-+@:,;=&#!*[\]]/;
 /** 文本末尾只剩一个没收全的 CSI 序列（如 "\x1b[38;2;12"） */
-const INCOMPLETE_ESC_RE = /^\x1b(?:\[[0-9;]*)?$/;
+const INCOMPLETE_ESC_RE = /^\x1b(?:\[[0-9;?]*)?$/;
 /** 文本末尾是 "file://" 的前几个字符（前面不是字母，避免把 "profile" 的尾巴当成它） */
 const PARTIAL_SCHEME_RE = /(?:^|[^A-Za-z])(f|fi|fil|file|file:|file:\/)$/;
 /** 暂留的半截 URL 上限，超过就当它不是 URL */

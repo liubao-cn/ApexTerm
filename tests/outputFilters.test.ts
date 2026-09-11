@@ -63,6 +63,18 @@ test("Devin 实际排版：行尾先重置颜色再换行缩进再设颜色，�
   );
 });
 
+test("折行处夹着清行 \\e[K 或光标隐藏 \\e[?25l 也算分隔符；光标移动则不算", () => {
+  const GRAY = "\x1b[38;2;124;124;124m";
+  const enc = encodeURIComponent;
+  const withK = `(file:///a/${enc("供数对接标准汇总版（发这一")}%E4\x1b[0m\x1b[K\r\n   ${GRAY}%BB%BD${enc("就够）")}.html)`;
+  assert.equal(decodeFileUrls(withK), `(file:///a/供数对接标准汇总版（发这一\x1b[0m\x1b[K\r\n   ${GRAY}份就够）.html)`);
+  const withHide = `(file:///a/%E5%B7%A5%E4\x1b[?25l\r\n  \x1b[?25h%BD%9C.md)`;
+  assert.equal(decodeFileUrls(withHide), `(file:///a/工\x1b[?25l\r\n  \x1b[?25h作.md)`);
+  // 光标上移：程序在重画别处，不能当续行
+  const withMove = `(file:///a/%E5%B7%A5%E4\x1b[2A%BD%9C)`;
+  assert.equal(decodeFileUrls(withMove), `(file:///a/工%E4\x1b[2A%BD%9C)`);
+});
+
 test("折行时行尾被切断的半个字符（如 %E）搬到下一行开头再解", () => {
   const wrapped = "x (file:///a/%E5%B7%A5%E\r\n  4%BD%9C.md) y";
   assert.equal(decodeFileUrls(wrapped), "x (file:///a/工\r\n  作.md) y");
