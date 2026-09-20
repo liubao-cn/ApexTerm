@@ -8,6 +8,7 @@ import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { api } from "./api";
 import { hideTip, showTipAt } from "./tooltip";
 import { xtermAlreadyHandled } from "./imeInsert";
+import { createOscGuard, type StreamFilter } from "./oscGuard";
 import { createFileUrlDecoder, type StreamDecoder } from "./outputFilters";
 
 /**
@@ -30,8 +31,12 @@ export interface TermRuntime {
   ui: { toggleSearch?: () => void; pastePaths?: (paths: string[]) => void; rename?: () => void };
   /** pty 字节流 → 文本（跨块的半个 UTF-8 字符由它接住） */
   textDecoder: TextDecoder;
-  /** 显示过滤：file:// 链接的百分号编码还原；结尾半截 URL 暂留 */
+  /** 显示过滤第一级：残缺的 OSC 8 超链接序列不让它把后面整屏都变成链接 */
+  oscGuard: StreamFilter;
+  /** 显示过滤第二级：file:// 链接的百分号编码还原；结尾半截 URL 暂留 */
   urlDecoder: StreamDecoder;
+  /** 最近一次输出是否走了 URL 解码（设置开着且不在全屏程序里），定时放行时沿用 */
+  urlFilterActive: boolean;
   urlFlushTimer: number | null;
 }
 
@@ -146,7 +151,9 @@ export function createRuntime(sessionId: string, opts: CreateOptions): TermRunti
     reconnectTimer: null,
     ui: {},
     textDecoder: new TextDecoder("utf-8"),
+    oscGuard: createOscGuard(),
     urlDecoder: createFileUrlDecoder(),
+    urlFilterActive: false,
     urlFlushTimer: null,
   };
   runtimes.set(sessionId, rt);
@@ -165,6 +172,18 @@ function clearFlushTimer(rt: TermRuntime) {
   }
 }
 
+/** 两级过滤是否还有暂留 */
+function filtersPending(rt: TermRuntime): boolean {
+  return rt.oscGuard.pending || rt.urlDecoder.pending;
+}
+
+/** 把两级过滤暂留的部分按顺序放出来：护栏放出的文字仍要经过 URL 解码（若它在工作） */
+function drainFilters(rt: TermRuntime, force: boolean): string {
+  const fromGuard = rt.oscGuard.flush(force);
+  if (!rt.urlFilterActive) return (rt.urlDecoder.pending ? rt.urlDecoder.flush(true) : "") + fromGuard;
+  return (fromGuard ? rt.urlDecoder.push(fromGuard) : "") + rt.urlDecoder.flush(force);
+}
+
 /**
  * 两段式放行：先放能显示的部分（解不出的半个字符继续留着等续行），过 1 秒还没有续行再全部放出。
  * 解码器自己记着"停在 URL 里"的状态，所以即便这里放行早了（主线程忙着 resize 重排），续行到了照样能接上。
@@ -173,11 +192,11 @@ function scheduleFlush(rt: TermRuntime) {
   clearFlushTimer(rt);
   rt.urlFlushTimer = window.setTimeout(() => {
     rt.urlFlushTimer = null;
-    rt.term.write(rt.urlDecoder.flush());
-    if (rt.urlDecoder.pending) {
+    rt.term.write(drainFilters(rt, false));
+    if (filtersPending(rt)) {
       rt.urlFlushTimer = window.setTimeout(() => {
         rt.urlFlushTimer = null;
-        rt.term.write(rt.urlDecoder.flush(true));
+        rt.term.write(drainFilters(rt, true));
       }, URL_FORCE_FLUSH_MS);
     }
   }, URL_HOLD_MS);
@@ -185,25 +204,26 @@ function scheduleFlush(rt: TermRuntime) {
 
 /**
  * 把 pty 送来的一段字节写进终端。
- * 开了「还原 file:// 链接里的中文」且不在全屏程序（备用缓冲区）里时，走显示过滤；
- * 结尾若停在半截 URL 上先暂留，等后续数据或定时器放行。
+ * 一律先过 OSC 8 护栏；开了「还原 file:// 链接里的中文」且不在全屏程序（备用缓冲区）里时再走 URL 解码；
+ * 结尾若停在半截转义序列 / 半截 URL 上先暂留，等后续数据或定时器放行。
  */
 export function writeOutput(rt: TermRuntime, bytes: Uint8Array, decodeFileUrls: boolean) {
-  const text = rt.textDecoder.decode(bytes, { stream: true });
+  const text = rt.oscGuard.push(rt.textDecoder.decode(bytes, { stream: true }));
   clearFlushTimer(rt);
-  if (!decodeFileUrls || rt.term.buffer.active.type !== "normal") {
+  rt.urlFilterActive = decodeFileUrls && rt.term.buffer.active.type === "normal";
+  if (!rt.urlFilterActive) {
     const held = rt.urlDecoder.pending ? rt.urlDecoder.flush(true) : "";
     rt.term.write(held + text);
-    return;
+  } else {
+    rt.term.write(rt.urlDecoder.push(text));
   }
-  rt.term.write(rt.urlDecoder.push(text));
-  if (rt.urlDecoder.pending) scheduleFlush(rt);
+  if (filtersPending(rt)) scheduleFlush(rt);
 }
 
 /** 会话结束等时机：把暂留的全部立刻吐出来 */
 export function flushOutput(rt: TermRuntime) {
   clearFlushTimer(rt);
-  if (rt.urlDecoder.pending) rt.term.write(rt.urlDecoder.flush(true));
+  if (filtersPending(rt)) rt.term.write(drainFilters(rt, true));
 }
 
 /**
