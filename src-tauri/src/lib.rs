@@ -30,6 +30,18 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_process::init())
+        // 窗口大小 / 位置 / 最大化 / 全屏：退出时保存、下次创建窗口时恢复。不恢复"是否可见"——
+        // 隐藏状态下退出（⌘H 后从 Dock 退出）会存成不可见，下次启动就看不到窗口了
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::SIZE
+                        | tauri_plugin_window_state::StateFlags::POSITION
+                        | tauri_plugin_window_state::StateFlags::MAXIMIZED
+                        | tauri_plugin_window_state::StateFlags::FULLSCREEN,
+                )
+                .build(),
+        )
         .setup(|app| {
             // 更新器只在桌面端有意义；dev 构建里也注册，便于手动"检查更新"走一遍流程
             #[cfg(desktop)]
@@ -94,6 +106,7 @@ pub fn run() {
             commands::resize_terminal,
             commands::close_terminal,
             commands::terminal_count,
+            commands::terminal_cwd,
             commands_files::local_home,
             commands_files::local_list,
             commands_files::local_mkdir,

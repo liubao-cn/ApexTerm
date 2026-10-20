@@ -37,6 +37,7 @@ import EditContextMenu from "./EditContextMenu.vue";
 import { useSettingsStore } from "../stores/settings";
 import { useFilesStore } from "../stores/files";
 import { useShortcutsStore } from "../stores/shortcuts";
+import { parseSnapshot, WORKSPACE_KEY } from "../workspace";
 
 const store = useHostsStore();
 const terminals = useTerminalsStore();
@@ -73,6 +74,32 @@ watch(
   (t) => getCurrentWindow().setTitle(t ? `${t} — ApexTerm` : "ApexTerm").catch(() => {}),
   { immediate: true },
 );
+
+// ---- 工作区：上次的标签 / 分屏 / 面板配色 / 标题 / 本地目录 ----
+// 存档先读进内存再开始自动保存，恢复之前的任何变动都不会把它覆盖掉
+const savedWorkspace = settings.prefs.restoreWorkspace ? parseSnapshot(localStorage.getItem(WORKSPACE_KEY)) : null;
+let workspaceSaveTimer = 0;
+// 随改随存，不依赖正常退出（崩溃、强退、自动更新重启后也能恢复）；关掉开关就删掉存档、不再记录
+watch(
+  () => (settings.prefs.restoreWorkspace ? JSON.stringify(terminals.exportWorkspace()) : null),
+  (json) => {
+    window.clearTimeout(workspaceSaveTimer);
+    workspaceSaveTimer = window.setTimeout(() => {
+      if (json === null) localStorage.removeItem(WORKSPACE_KEY);
+      else localStorage.setItem(WORKSPACE_KEY, json);
+    }, 300);
+  },
+);
+
+/** 存档里的主机 → 现在 config 里的主机 id：优先按别名（连接用的就是别名），主机已删掉返回 null */
+function resolveHostId(id: string | null, alias: string | null): string | null {
+  const byAlias = alias ? store.hosts.find((h) => h.alias === alias) : undefined;
+  if (byAlias) return byAlias.id;
+  return (id && store.hosts.find((h) => h.id === id)?.id) || null;
+}
+
+/** 切到别的程序时把本地终端的目录刷一遍 */
+const onWindowBlur = () => terminals.refreshAllCwds();
 
 const formOpen = ref(false);
 const formHost = ref<HostEntry | null>(null);
@@ -253,6 +280,14 @@ onErrorCaptured((err) => {
 onMounted(async () => {
   shortcuts.load().catch(() => {});
   await store.load();
+  if (savedWorkspace) {
+    try {
+      terminals.restoreWorkspace(savedWorkspace, resolveHostId);
+    } catch {
+      /* 存档有问题就当没有，正常空白启动 */
+    }
+  }
+  window.addEventListener("blur", onWindowBlur);
   // 恢复上次勾选了"自动上传"的联动组
   files.resumeWatchers().catch(() => {});
   if (settings.prefs.probeOnStart) store.probeAllServers();
@@ -281,6 +316,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleKeydown);
+  window.removeEventListener("blur", onWindowBlur);
   unlistenMenu?.();
   unlistenDrop?.();
   stopUpdateSchedule?.();
@@ -351,15 +387,20 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
+          <!-- 恢复出来还没切过去的标签（deferred）先不挂载：第一次切到时才连接 -->
           <template v-for="t in terminals.tabs" :key="t.id">
             <div v-show="terminals.activeId === t.id" class="tab-body">
               <PaneLayout
-                v-if="t.kind === 'terminal' && t.layout"
+                v-if="t.kind === 'terminal' && t.layout && !t.deferred"
                 :tab="t"
                 :node="t.layout"
                 :visible="terminals.activeId === t.id"
               />
-              <FilesView v-else-if="t.kind === 'files' && t.hostId" :tab="t" :active="terminals.activeId === t.id" />
+              <FilesView
+                v-else-if="t.kind === 'files' && t.hostId && !t.deferred"
+                :tab="t"
+                :active="terminals.activeId === t.id"
+              />
             </div>
           </template>
         </div>

@@ -478,6 +478,8 @@ export const api = {
   resizeTerminal: (id: string, cols: number, rows: number) =>
     invoke<void>("resize_terminal", { id, cols, rows }),
   closeTerminal: (id: string) => invoke<void>("close_terminal", { id }),
+  /** 会话 shell 的当前工作目录；会话已结束或读不到时为 null */
+  terminalCwd: (id: string) => invoke<string | null>("terminal_cwd", { id }),
 };
 
 /** base64 → 字节，交给 xterm 自己做 UTF-8 流式解码（多字节字符跨分片也不会乱码） */

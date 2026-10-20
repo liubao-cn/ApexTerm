@@ -396,6 +396,11 @@ pub fn terminal_count(term: State<TerminalState>) -> usize {
 }
 
 #[tauri::command]
+pub fn terminal_cwd(term: State<TerminalState>, id: String) -> Option<String> {
+    term.cwd(&id)
+}
+
+#[tauri::command]
 pub fn list_keys(state: State<AppState>) -> Result<Vec<KeyInfo>> {
     let store = state.config()?;
     Ok(keys::list_keys(&state.ssh_dir, &store.hosts()))

@@ -4,9 +4,11 @@ import { NButton, NModal, NProgress, NSpin } from "naive-ui";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ArrowUpCircle, CheckCircle2, CircleAlert } from "lucide-vue-next";
 import { RELEASES_URL, useUpdaterStore } from "../stores/updater";
+import { useSettingsStore } from "../stores/settings";
 import MarkdownLite from "./MarkdownLite.vue";
 
 const updater = useUpdaterStore();
+const settings = useSettingsStore();
 
 const percent = computed(() => {
   if (!updater.total) return null;
@@ -43,7 +45,11 @@ const title = computed(() => {
 /** 不可关闭的阶段：下载安装中 */
 const busy = computed(() => updater.phase === "downloading");
 /** 这是终端：重启等于掐断所有会话，两个阶段都要说清楚 */
-const RESTART_WARNING = "重启会关闭所有终端会话和正在运行的命令。";
+const RESTART_WARNING = computed(() =>
+  settings.prefs.restoreWorkspace
+    ? "重启会结束所有终端会话和正在运行的命令，标签和分屏会自动恢复。"
+    : "重启会关闭所有终端会话和正在运行的命令。",
+);
 </script>
 
 <template>

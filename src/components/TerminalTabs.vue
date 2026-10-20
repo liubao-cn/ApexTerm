@@ -11,23 +11,30 @@ const terminals = useTerminalsStore();
 const settings = useSettingsStore();
 const updater = useUpdaterStore();
 
-/** 标签整体状态：有面板在连接 → 连接中；全部结束 → 已结束；否则运行中 */
+/** 标签整体状态：恢复后还没切过去 → 未连接；有面板在连接 → 连接中；全部结束 → 已结束；否则运行中 */
 function tabStatus(t: Tab): TermStatus | "files" {
   if (t.kind === "files") return "files";
   const ss = terminals.sessionsOf(t.id);
+  if (ss.some((s) => s.status === "idle")) return "idle";
   if (ss.some((s) => s.status === "connecting")) return "connecting";
   if (ss.some((s) => s.status === "running")) return "running";
   if (ss.some((s) => s.status === "error")) return "error";
   return "exited";
 }
 
+const STATUS_LABEL: Record<TermStatus, string> = {
+  idle: "未连接 · 切到这个标签时连接",
+  connecting: "连接中",
+  running: "已连接",
+  error: "连接失败",
+  exited: "已结束",
+};
+
 function statusTitle(t: Tab): string {
-  const ss = terminals.sessionsOf(t.id);
-  if (t.kind === "files") return "文件管理";
   const st = tabStatus(t);
-  const base =
-    st === "connecting" ? "连接中" : st === "running" ? "已连接" : st === "error" ? "连接失败" : "已结束";
-  return ss.length > 1 ? `${base} · ${ss.length} 个分屏` : base;
+  if (st === "files") return "文件管理";
+  const n = terminals.sessionsOf(t.id).length;
+  return n > 1 ? `${STATUS_LABEL[st]} · ${n} 个分屏` : STATUS_LABEL[st];
 }
 
 function tabIcon(t: Tab) {
@@ -350,6 +357,11 @@ function tabDropClass(t: Tab) {
   border-radius: 50%;
   flex: none;
   background: var(--text-3);
+}
+
+.dot.idle {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--text-3);
 }
 
 .dot.connecting {

@@ -530,6 +530,10 @@ function revealData() {
                 <div><b>启动时自动探测所有服务器</b><div class="muted small">打开程序就并发探测在线 / 免密状态（19 台约 5–10 秒）</div></div>
                 <n-switch :value="p.probeOnStart" @update:value="(v: boolean) => settings.patch({ probeOnStart: v })" />
               </div>
+              <div class="toggle">
+                <div><b>启动时恢复上次的标签</b><div class="muted small">记住标签、分屏、面板配色、标题和本地终端所在目录，重新打开时原样恢复，只连接上次停留的标签、其余点到时再连；正在运行的程序和屏幕内容不恢复，也不会重放任何命令。关掉后不再记录并删除已存的记录</div></div>
+                <n-switch :value="p.restoreWorkspace" @update:value="(v: boolean) => settings.patch({ restoreWorkspace: v })" />
+              </div>
             </section>
           </template>
 

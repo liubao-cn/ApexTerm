@@ -43,6 +43,22 @@ struct Session {
     writer: Box<dyn Write + Send>,
     master: Box<dyn MasterPty + Send>,
     killer: Box<dyn ChildKiller + Send + Sync>,
+    /// 子进程（本地 shell / ssh）的 pid，用来读本地 shell 的当前目录
+    pid: Option<u32>,
+}
+
+/// 某个进程的当前工作目录；拿不到（进程已退出、无权限、平台不支持）返回 None
+fn process_cwd(pid: u32) -> Option<String> {
+    use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+    let pid = Pid::from_u32(pid);
+    let mut sys = System::new();
+    sys.refresh_processes_specifics(
+        ProcessesToUpdate::Some(&[pid]),
+        false,
+        ProcessRefreshKind::nothing().with_cwd(UpdateKind::Always),
+    );
+    let cwd = sys.process(pid)?.cwd()?.to_string_lossy().into_owned();
+    (!cwd.is_empty()).then_some(cwd)
 }
 
 type Sessions = Arc<Mutex<HashMap<String, Session>>>;
@@ -244,6 +260,7 @@ impl TerminalState {
             .take_writer()
             .map_err(|e| AppError::msg(format!("写入伪终端失败: {e}")))?;
         let killer = child.clone_killer();
+        let pid = child.process_id();
 
         self.sessions.lock().unwrap().insert(
             id.clone(),
@@ -251,6 +268,7 @@ impl TerminalState {
                 writer,
                 master: pair.master,
                 killer,
+                pid,
             },
         );
 
@@ -329,6 +347,12 @@ impl TerminalState {
     pub fn count(&self) -> usize {
         self.sessions.lock().unwrap().len()
     }
+
+    /// 会话子进程的当前工作目录（本地终端 = shell 所在目录），重新打开程序时在这里起 shell
+    pub fn cwd(&self, id: &str) -> Option<String> {
+        let pid = self.sessions.lock().unwrap().get(id)?.pid?;
+        process_cwd(pid)
+    }
 }
 
 #[cfg(test)]
@@ -369,5 +393,13 @@ mod tests {
         assert_eq!(args[1..], ["-t", "--", "prod", "df -h; exec \"${SHELL:-/bin/sh}\" -l"]);
         let plain = build_command(&ssh("prod", Some("  ")), "xterm-256color", "apexterm").unwrap();
         assert_eq!(plain.get_argv().len(), 3);
+    }
+
+    #[test]
+    fn reads_process_cwd() {
+        let got = process_cwd(std::process::id()).expect("读不到自身进程的工作目录");
+        let canon = |p: &std::path::Path| std::fs::canonicalize(p).unwrap();
+        assert_eq!(canon(got.as_ref()), canon(&std::env::current_dir().unwrap()));
+        assert_eq!(TerminalState::default().cwd("t404"), None);
     }
 }

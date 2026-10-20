@@ -442,10 +442,12 @@ function onHeadPointerUp() {
 
 const statusText = computed(() => {
   switch (props.session.status) {
+    case "idle":
+      return "未连接";
     case "connecting":
       return "连接中";
     case "running":
-      return props.session.subtitle || "已连接";
+      return props.session.subtitle || (props.session.lastTitle ? `上次：${props.session.lastTitle}` : "已连接");
     case "exited":
       return "已结束";
     case "error":
@@ -514,8 +516,11 @@ onMounted(() => {
         cancelAutoReconnect();
         return;
       }
-      if (rt.backendId) api.writeTerminal(rt.backendId, d).catch(() => {});
-      else if (d === "\r") {
+      if (rt.backendId) {
+        api.writeTerminal(rt.backendId, d).catch(() => {});
+        // 回车后 shell 可能换了目录（cd 等）：稍后读一次，重新打开程序时在新目录起 shell
+        if (d.includes("\r")) store.scheduleCwdRefresh(props.session.id);
+      } else if (d === "\r") {
         const s = store.sessions.find((x) => x.id === props.session.id);
         if (s && (s.status === "exited" || s.status === "error")) reconnect();
       }
@@ -523,7 +528,7 @@ onMounted(() => {
     rt.term.onResize(({ cols, rows }) => {
       if (rt.backendId) api.resizeTerminal(rt.backendId, cols, rows).catch(() => {});
     });
-    rt.term.onTitleChange((t) => store.update(props.session.id, { subtitle: t }));
+    rt.term.onTitleChange((t) => store.update(props.session.id, { subtitle: t, lastTitle: undefined }));
     rt.term.onSelectionChange(() => {
       if (settings.prefs.copyOnSelect && rt.term.hasSelection()) {
         writeText(selectionText()).catch(() => {});
@@ -536,6 +541,12 @@ onMounted(() => {
 
   resizeObserver = new ResizeObserver(() => scheduleFit());
   resizeObserver.observe(container.value!);
+
+  // 从存档恢复的面板：先提示上次这里在跑什么（如 devin: 对话标题），方便接着 devin -r
+  if (fresh && props.session.restored) {
+    if (props.session.lastTitle) rt.term.write(`${GRAY}— 上次这里是：${props.session.lastTitle} —${RESET}\r\n`);
+    store.update(props.session.id, { restored: false });
+  }
 
   nextTick(() => {
     if (fresh) connect();

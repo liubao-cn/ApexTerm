@@ -1,9 +1,11 @@
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { acceptHMRUpdate, defineStore } from "pinia";
 import { api, type HostEntry, type TerminalTarget } from "../api";
 import { disposeRuntime, getRuntime } from "../terminalRegistry";
+import { buildWorkspace, snapshotWorkspace, type BuildDeps, type WorkspaceSnapshot } from "../workspace";
 
-export type TermStatus = "connecting" | "running" | "exited" | "error";
+/** idle：重新打开程序后恢复出来、还没切过去的面板，第一次显示时才连接 */
+export type TermStatus = "idle" | "connecting" | "running" | "exited" | "error";
 
 export interface TermSession {
   id: string;
@@ -24,8 +26,14 @@ export interface TermSession {
   generation: number;
   /** 连上（收到第一个字节）后原样写入终端的内容，用一次即清空；要执行请自带 \r */
   initialInput?: string | null;
-  /** 这个面板临时指定的配色（预设 id）；不设则用主机配色，再退到全局 */
+  /** 这个面板指定的配色（预设 id）；不设则用主机配色，再退到全局 */
   themeId?: string | null;
+  /** 本地终端 shell 最近一次读到的工作目录，重新打开程序时在这里起 shell */
+  cwd?: string | null;
+  /** 上次运行时程序设置的标题（如 `devin: 对话标题`），新程序设置标题前显示为「上次：…」 */
+  lastTitle?: string;
+  /** 从存档恢复出来的，首次挂载时在终端里提示一行「上次这里是…」 */
+  restored?: boolean;
 }
 
 /** 分屏布局树：叶子是一个终端面板，split 节点按 ratio 分给左/上 (a) 和右/下 (b) */
@@ -42,6 +50,8 @@ export interface Tab {
   layout: Layout | null;
   /** 当前聚焦的面板 */
   activeSessionId: string | null;
+  /** 恢复出来还没切过去：先不挂载（不连接），第一次激活时才挂载 */
+  deferred?: boolean;
 }
 
 let seq = 0;
@@ -367,6 +377,60 @@ export const useTerminalsStore = defineStore("terminals", () => {
     if (t) activeId.value = t.id;
   }
 
+  // ---- 工作区存档 / 恢复 ----
+  /** 恢复出来的标签第一次被切到：挂载并开始连接 */
+  function wake(tabId: string) {
+    const tab = tabs.value.find((t) => t.id === tabId);
+    if (!tab?.deferred) return;
+    updateTab(tabId, { deferred: false });
+    sessions.value = sessions.value.map((s) =>
+      s.tabId === tabId && s.status === "idle" ? { ...s, status: "connecting" } : s,
+    );
+  }
+  // 同步执行：标签在渲染前就已唤醒，面板是在可见状态下挂载的（尺寸正确）
+  watch(activeId, (id) => id && wake(id), { flush: "sync" });
+
+  function exportWorkspace(): WorkspaceSnapshot {
+    return snapshotWorkspace(tabs.value, sessions.value, activeId.value);
+  }
+
+  /** 启动时恢复上次的工作区；恢复前已经开了标签的话，恢复出来的标签排在前面且全部延迟连接 */
+  function restoreWorkspace(snap: WorkspaceSnapshot, resolveHostId: BuildDeps["resolveHostId"]) {
+    const fresh = tabs.value.length === 0;
+    const r = buildWorkspace(snap, { newId: nextId, makeSession, resolveHostId, wakeActive: fresh });
+    if (!r.tabs.length) return;
+    sessions.value = [...r.sessions, ...sessions.value];
+    tabs.value = [...r.tabs, ...tabs.value];
+    if (r.activeId) activeId.value = r.activeId;
+  }
+
+  const cwdTimers = new Map<string, number>();
+  /** 本地终端按了回车：稍后读一次 shell 的当前目录（cd 等命令回车后立即生效） */
+  function scheduleCwdRefresh(sessionId: string) {
+    const s = sessions.value.find((x) => x.id === sessionId);
+    if (s?.target.kind !== "local") return;
+    window.clearTimeout(cwdTimers.get(sessionId));
+    cwdTimers.set(
+      sessionId,
+      window.setTimeout(() => {
+        cwdTimers.delete(sessionId);
+        refreshCwd(sessionId);
+      }, 800),
+    );
+  }
+
+  async function refreshCwd(sessionId: string) {
+    const s = sessions.value.find((x) => x.id === sessionId);
+    if (s?.target.kind !== "local" || !s.backendId) return;
+    const cwd = await api.terminalCwd(s.backendId).catch(() => null);
+    if (cwd && sessions.value.find((x) => x.id === sessionId)?.cwd !== cwd) update(sessionId, { cwd });
+  }
+
+  /** 窗口失焦时把所有本地终端的目录刷一遍（兜底：没经过回车就换了目录的情况） */
+  function refreshAllCwds() {
+    for (const s of sessions.value) if (s.target.kind === "local" && s.backendId) refreshCwd(s.id);
+  }
+
   return {
     tabs,
     sessions,
@@ -401,6 +465,10 @@ export const useTerminalsStore = defineStore("terminals", () => {
     reconnect,
     cycle,
     activateIndex,
+    exportWorkspace,
+    restoreWorkspace,
+    scheduleCwdRefresh,
+    refreshAllCwds,
   };
 });
 

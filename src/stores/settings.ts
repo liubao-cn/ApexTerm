@@ -45,6 +45,8 @@ export interface Prefs {
   appTheme: AppTheme;
   tooltipDelay: number;
   probeOnStart: boolean;
+  /** 重新打开程序时恢复上次的标签、分屏、面板配色、标题和本地终端目录 */
+  restoreWorkspace: boolean;
   /** 启动后静默检查一次新版本（GitHub Releases） */
   autoCheckUpdate: boolean;
   // ---- 文件 ----
@@ -90,6 +92,7 @@ export const DEFAULTS: Prefs = {
   appTheme: "dark",
   tooltipDelay: 150,
   probeOnStart: false,
+  restoreWorkspace: true,
   autoCheckUpdate: true,
   showHidden: true,
   defaultLocalDir: "",
