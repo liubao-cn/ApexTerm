@@ -11,7 +11,7 @@ import { useCommandsStore } from "../stores/commands";
 import { useCloudStore } from "../stores/cloud";
 import { HOMEPAGE_URL, useUpdaterStore } from "../stores/updater";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { getTerm } from "../terminalRegistry";
+import { clearTerminal, getTerm } from "../terminalRegistry";
 import { neighborPane, type NavDir } from "../paneNav";
 import { appShortcut, isTabModifier } from "../platform";
 import type { HostEntry, HostInput } from "../api";
@@ -143,7 +143,7 @@ function handleMenu(id: string) {
       terminals.closeActive();
       break;
     case "clear-terminal":
-      getTerm(terminals.activeSession?.id)?.term.clear();
+      clearTerminal(getTerm(terminals.activeSession?.id));
       break;
     case "split-right":
       terminals.split("row");

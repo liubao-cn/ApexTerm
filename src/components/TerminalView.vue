@@ -20,7 +20,18 @@ import { reflowSelection } from "../copyReflow";
 import { useTerminalsStore, type DropSide, type DropZone, type TermSession } from "../stores/terminals";
 import { useHostsStore } from "../stores/hosts";
 import { useSettingsStore } from "../stores/settings";
-import { attach, beep, createRuntime, detach, flushOutput, getRuntime, writeOutput, type TermRuntime } from "../terminalRegistry";
+import {
+  attach,
+  beep,
+  clearTerminal,
+  createRuntime,
+  detach,
+  flushOutput,
+  getRuntime,
+  setGpuAcceleration,
+  writeOutput,
+  type TermRuntime,
+} from "../terminalRegistry";
 import { appShortcut, isMac, isTabModifier } from "../platform";
 import { useQuickCommands } from "../quickCommands";
 import { useShortcutsStore } from "../stores/shortcuts";
@@ -325,7 +336,7 @@ function onCtxSelect(key: string) {
     case "select-all":
       return rt.term.selectAll();
     case "clear":
-      return rt.term.clear();
+      return clearTerminal(rt);
     case "find":
       return toggleSearch();
     case "split-row":
@@ -490,7 +501,7 @@ onMounted(() => {
   rt =
     existing ??
     createRuntime(props.session.id, { ...settings.prefs, theme: paneXtermTheme.value });
-  attach(rt, container.value!);
+  attach(rt, container.value!, settings.prefs.gpuAcceleration);
   rt.ui.toggleSearch = toggleSearch;
   rt.ui.pastePaths = pastePaths;
   rt.ui.rename = startRename;
@@ -559,6 +570,7 @@ watch(
   () => props.active,
   (v) => v && nextTick(() => {
     scheduleFit();
+    rt.term.refresh(0, rt.term.rows - 1);
     rt.term.focus();
   }),
 );
@@ -576,6 +588,7 @@ watch(
     rt.term.options.macOptionIsMeta = ap.optionAsMeta;
     rt.term.options.drawBoldTextInBrightColors = ap.brightBold;
     rt.term.options.theme = th;
+    setGpuAcceleration(rt, ap.gpuAcceleration);
     if (props.active) scheduleFit();
   },
   { deep: true },

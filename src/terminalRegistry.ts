@@ -10,6 +10,7 @@ import { hideTip, showTipAt } from "./tooltip";
 import { xtermAlreadyHandled } from "./imeInsert";
 import { createOscGuard, type StreamFilter } from "./oscGuard";
 import { createFileUrlDecoder, type StreamDecoder } from "./outputFilters";
+import { patchWebglAddon } from "./webglGuard";
 
 /**
  * 终端运行时：xterm 实例 + pty 连接状态。按会话 id 登记，独立于 Vue 组件的挂载/卸载，
@@ -20,6 +21,7 @@ export interface TermRuntime {
   term: Terminal;
   fit: FitAddon;
   search: SearchAddon;
+  webgl: WebglAddon | null;
   backendId: string | null;
   /** 当前连接的令牌，旧连接的回调用它判断是否已过期 */
   connectionToken: object | null;
@@ -144,6 +146,7 @@ export function createRuntime(sessionId: string, opts: CreateOptions): TermRunti
     term,
     fit,
     search,
+    webgl: null,
     backendId: null,
     connectionToken: null,
     gotOutput: false,
@@ -249,20 +252,46 @@ function fixImeDirectInsert(term: Terminal) {
   });
 }
 
+/** 开启或关闭该终端的 WebGL 渲染（支持运行中实时热切换，无需重连会话） */
+export function setGpuAcceleration(rt: TermRuntime, enabled: boolean) {
+  if (!rt.term.element) return;
+  if (enabled && !rt.webgl) {
+    try {
+      const webgl = new WebglAddon();
+      webgl.onContextLoss(() => {
+        if (rt.webgl === webgl) rt.webgl = null;
+        webgl.dispose();
+      });
+      rt.term.loadAddon(webgl);
+      patchWebglAddon(webgl);
+      rt.webgl = webgl;
+    } catch {
+      /* WebGL 不可用时回退到 DOM 渲染 */
+      rt.webgl = null;
+    }
+  } else if (!enabled && rt.webgl) {
+    const webgl = rt.webgl;
+    rt.webgl = null;
+    webgl.dispose();
+  }
+}
+
+/** 清屏并重置当前字形纹理图集缓存 */
+export function clearTerminal(rt: TermRuntime | undefined) {
+  if (!rt) return;
+  rt.term.clear();
+  rt.webgl?.clearTextureAtlas();
+}
+
 /** 把终端挂到容器里：首次 open，之后只是把已有 DOM 移过去 */
-export function attach(rt: TermRuntime, container: HTMLElement) {
+export function attach(rt: TermRuntime, container: HTMLElement, gpuAcceleration = true) {
   if (!rt.term.element) {
     rt.term.open(container);
     fixImeDirectInsert(rt.term);
-    try {
-      const webgl = new WebglAddon();
-      webgl.onContextLoss(() => webgl.dispose());
-      rt.term.loadAddon(webgl);
-    } catch {
-      /* WebGL 不可用时回退到 DOM 渲染 */
-    }
+    setGpuAcceleration(rt, gpuAcceleration);
   } else if (rt.term.element.parentElement !== container) {
     container.appendChild(rt.term.element);
+    setGpuAcceleration(rt, gpuAcceleration);
     rt.term.refresh(0, rt.term.rows - 1);
   }
 }
@@ -281,6 +310,7 @@ export function disposeRuntime(sessionId: string) {
   if (rt.reconnectTimer) clearTimeout(rt.reconnectTimer);
   if (rt.backendId) api.closeTerminal(rt.backendId).catch(() => {});
   rt.backendId = null;
+  rt.webgl = null;
   rt.term.dispose();
 }
 

@@ -41,6 +41,8 @@ export interface Prefs {
   termProgram: TermProgram;
   /** 显示时把输出里 file:// 链接的百分号编码还原成可读文字（全屏程序不处理） */
   decodeFileUrls: boolean;
+  /** 用 WebGL 渲染终端文字与框线；关闭则使用 DOM 渲染 */
+  gpuAcceleration: boolean;
   // ---- 界面 ----
   appTheme: AppTheme;
   tooltipDelay: number;
@@ -89,6 +91,7 @@ export const DEFAULTS: Prefs = {
   termType: "xterm-256color",
   termProgram: "apexterm",
   decodeFileUrls: true,
+  gpuAcceleration: true,
   appTheme: "dark",
   tooltipDelay: 150,
   probeOnStart: false,

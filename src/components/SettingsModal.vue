@@ -296,6 +296,10 @@ function revealData() {
                 <div><b>还原 file:// 链接里的中文</b><div class="muted small">程序按 URL 规范把中文路径打印成 %E5%B7%A5 这类编码，显示时还原成可读文字；只改显示不改数据，vim / less 等全屏程序里不处理</div></div>
                 <n-switch :value="p.decodeFileUrls" size="small" @update:value="(v: boolean) => settings.patch({ decodeFileUrls: v })" />
               </div>
+              <div class="toggle">
+                <div><b>硬件加速渲染（WebGL）</b><div class="muted small">用 GPU 渲染文字与框线，滚动和大量输出更流畅；若遇到系统显卡驱动异常导致字符花屏，关闭后立即切回标准 DOM 渲染</div></div>
+                <n-switch :value="p.gpuAcceleration" size="small" @update:value="(v: boolean) => settings.patch({ gpuAcceleration: v })" />
+              </div>
             </section>
 
             <section class="card">
