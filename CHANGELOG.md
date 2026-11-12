@@ -4,6 +4,9 @@
 
 ## 未发布
 
+### 新功能
+- 支持 Kitty 键盘协议（`CSI ? u` / `CSI > u` / `CSI < u` / `CSI = u`，主屏幕与备用屏幕独立模式栈）：Devin CLI、Claude Code、Neovim、Helix、Yazi 等工具可原生识别 `⌘ + Enter` / `Ctrl + Enter`（Devin CLI 进行中会话将消息加入等待队列）、`Shift + Enter`（多行输入换行）以及 `Ctrl + Shift` 等组合键；普通 shell、中文输入法组词及系统剪贴板快捷键保持原有行为不变
+
 ## v1.0.15 · 2026-11-11
 
 ### 修复

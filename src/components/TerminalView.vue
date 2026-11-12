@@ -136,6 +136,7 @@ async function connect() {
   rt.connectionToken = token;
   rt.backendId = null;
   rt.gotOutput = false;
+  rt.kitty.reset();
   const sessionId = props.session.id;
   startConnectClock();
   try {
@@ -510,14 +511,15 @@ onMounted(() => {
 
   if (fresh) {
     rt.term.attachCustomKeyEventHandler((e) => {
-      if (e.type !== "keydown") return true;
-      // 用户可自定义的应用快捷键：放行给原生菜单
+      // 用户可自定义的应用快捷键与切标签组合键：keydown / keyup 均放行给宿主，避免事件上报模式下发出孤立的 keyup
       if (shortcuts.matches(e)) return false;
       if (isTabModifier(e) && /^[0-9]$/.test(e.key)) return false;
-      if (e.key === "Escape" && searchOpen.value) {
+      if (e.type === "keydown" && e.key === "Escape" && searchOpen.value) {
         toggleSearch();
         return false;
       }
+      // Kitty 键盘协议（Devin CLI 的 Cmd+Enter 入队、Shift+Enter 换行等）：已由协议接管发送时阻止 xterm 再发 \r
+      if (rt.kitty.handleDomKeyEvent(e)) return false;
       return true;
     });
     rt.term.onData((d) => {

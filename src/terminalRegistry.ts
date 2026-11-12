@@ -10,6 +10,7 @@ import { hideTip, showTipAt } from "./tooltip";
 import { xtermAlreadyHandled } from "./imeInsert";
 import { createOscGuard, type StreamFilter } from "./oscGuard";
 import { createFileUrlDecoder, type StreamDecoder } from "./outputFilters";
+import { installKittyKeyboard, type KittyKeyboard } from "./kittyKeyboard";
 import { patchWebglAddon } from "./webglGuard";
 
 /**
@@ -21,6 +22,7 @@ export interface TermRuntime {
   term: Terminal;
   fit: FitAddon;
   search: SearchAddon;
+  kitty: KittyKeyboard;
   webgl: WebglAddon | null;
   backendId: string | null;
   /** 当前连接的令牌，旧连接的回调用它判断是否已过期 */
@@ -141,11 +143,13 @@ export function createRuntime(sessionId: string, opts: CreateOptions): TermRunti
   term.loadAddon(new Unicode11Addon());
   term.unicode.activeVersion = "11";
   term.loadAddon(new WebLinksAddon((_e, uri) => openUrl(uri).catch(() => {})));
+  const kitty = installKittyKeyboard(term);
   const rt: TermRuntime = {
     sessionId,
     term,
     fit,
     search,
+    kitty,
     webgl: null,
     backendId: null,
     connectionToken: null,
@@ -311,6 +315,7 @@ export function disposeRuntime(sessionId: string) {
   if (rt.backendId) api.closeTerminal(rt.backendId).catch(() => {});
   rt.backendId = null;
   rt.webgl = null;
+  rt.kitty.dispose();
   rt.term.dispose();
 }
 
