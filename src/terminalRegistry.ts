@@ -12,6 +12,7 @@ import { createOscGuard, type StreamFilter } from "./oscGuard";
 import { createFileUrlDecoder, type StreamDecoder } from "./outputFilters";
 import { installKittyKeyboard, type KittyKeyboard } from "./kittyKeyboard";
 import { patchWebglAddon } from "./webglGuard";
+import { minimumContrastFor } from "./themeColors";
 
 /**
  * 终端运行时：xterm 实例 + pty 连接状态。按会话 id 登记，独立于 Vue 组件的挂载/卸载，
@@ -76,6 +77,8 @@ export interface CreateOptions {
   scrollback: number;
   optionAsMeta: boolean;
   brightBold: boolean;
+  /** 可读性增强：打开时让 xterm 按每个字实际的底色动态保底对比度 */
+  boostReadability: boolean;
   theme: ITheme;
 }
 
@@ -132,6 +135,7 @@ export function createRuntime(sessionId: string, opts: CreateOptions): TermRunti
     scrollback: opts.scrollback,
     macOptionIsMeta: opts.optionAsMeta,
     drawBoldTextInBrightColors: opts.brightBold,
+    minimumContrastRatio: minimumContrastFor(opts.boostReadability),
     macOptionClickForcesSelection: true,
     rightClickSelectsWord: false,
     theme: opts.theme,

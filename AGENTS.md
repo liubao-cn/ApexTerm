@@ -6,6 +6,7 @@
 - **本地验证仅运行轻量前端检查**：
   - 单测：`pnpm test`
   - 类型检查：`pnpm typecheck`
+  - 界面实测：`pnpm dev` 只起前端（1420 端口，不触发 Rust 编译）；在隔离浏览器（Playwright WebKit）里先注入 `window.__TAURI_INTERNALS__` 替身（`invoke` 按命令返回空数据，`open_terminal` 记下 `onEvent` 通道后可往终端喂输出）即可点右键菜单、设置页并截图。替身脚本放 `/tmp`，不进仓库
 - **多平台编译、签名与安装包构建统一交由 GitHub Actions 完成**：
   - 常规校验见 `.github/workflows/ci.yml`
   - 发版流程：先提交代码与 `CHANGELOG.md` 的「未发布」说明，再执行 `pnpm release <主.次.补丁>` 生成版本提交与 `v*` 标签，最后 `git push --follow-tags` 触发 `.github/workflows/release.yml` 自动打包发布（应用内更新器会自动拉取新版本）。

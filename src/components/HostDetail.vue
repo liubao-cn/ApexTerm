@@ -33,7 +33,9 @@ import { useTerminalsStore } from "../stores/terminals";
 import { useCommandsStore } from "../stores/commands";
 import { KIND_LABEL, errorText, sshCommand, type HostEntry } from "../api";
 import { debounce } from "../utils";
-import { THEME_FAMILIES } from "../themeCatalog";
+import { presetById } from "../themes";
+import { CURATED_GROUPS, extraThemeIds } from "../themeCatalog";
+import { useSettingsStore } from "../stores/settings";
 import QuickCommandsMenu from "./QuickCommandsMenu.vue";
 import CloudPowerCard from "./CloudPowerCard.vue";
 
@@ -148,13 +150,25 @@ const groupOptions = computed(() =>
   store.groups.map((g) => ({ label: g, value: g })),
 );
 
-/** 精选配色按家族分组；生产机红底、测试机绿底这类区分靠它 */
-const themeOptions = THEME_FAMILIES.map((f) => ({
-  type: "group" as const,
-  label: f.name,
-  key: f.name,
-  children: f.variants.map((v) => ({ label: f.variants.length === 1 ? f.name : `${f.name} · ${v.label}`, value: v.id })),
-}));
+/** 推荐的成套配色 + 用户收藏的（生产机红底、测试机绿底这类区分，先到设置里收藏一套再来选） */
+const settings = useSettingsStore();
+const themeOptions = computed(() => {
+  const extras = extraThemeIds(settings.prefs.favoriteThemes, [themeId.value]);
+  return [
+    ...CURATED_GROUPS.map((g) => ({
+      type: "group" as const,
+      label: g.name,
+      key: g.key,
+      children: g.families.flatMap((f) => [
+        { label: `${f.name} · 深色`, value: f.dark },
+        { label: `${f.name} · 浅色`, value: f.light },
+      ]),
+    })),
+    ...(extras.length
+      ? [{ type: "group" as const, label: "收藏 / 正在使用", key: "extras", children: extras.map((id) => ({ label: presetById(id).name, value: id })) }]
+      : []),
+  ];
+});
 
 const saveStateText = computed(
   () =>
@@ -385,7 +399,7 @@ function keyInfo(path: string) {
             />
           </div>
           <p class="hint" style="margin: 8px 0 0">
-            连这台主机的每个终端面板都用这个配色，例如生产机用红底一眼分清；面板右键「此面板配色」可临时覆盖。
+            连这台主机的每个终端面板都用这个配色，例如生产机用红底一眼分清（推荐之外的配色先在 设置 → 配色主题 里点 ★ 收藏，就会出现在这里）；面板右键「此面板配色」可临时覆盖。
           </p>
         </section>
 

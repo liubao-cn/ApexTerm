@@ -25,7 +25,6 @@ import {
   Palette,
   RotateCcw,
   Search,
-  Star,
   Terminal,
 } from "lucide-vue-next";
 import {
@@ -33,13 +32,12 @@ import {
   FONT_OPTIONS,
   TERM_TYPES,
   THEME_PRESETS,
-  isDark,
-  minContrast,
   presetById,
   type TermTheme,
   type TermThemePreset,
 } from "../themes";
-import { CURATED_IDS, THEME_FAMILIES } from "../themeCatalog";
+import { CURATED_FAMILIES, CURATED_GROUPS, CURATED_IDS } from "../themeCatalog";
+import ThemeCard from "./ThemeCard.vue";
 import { FONT_MAX, FONT_MIN, useSettingsStore, type SettingsSection, type TermProgram } from "../stores/settings";
 import { useShortcutsStore } from "../stores/shortcuts";
 import { useHostsStore } from "../stores/hosts";
@@ -82,59 +80,32 @@ const termProgramOptions: { label: string; value: TermProgram }[] = [
   { label: "VS Code 兼容", value: "vscode" },
 ];
 
-// ---- 主题库：精选按家族分组展示；600+ 完整库收在「全部」里搜索 ----
-type Filter = "featured" | "dark" | "light" | "favorites" | "all";
+// ---- 配色：默认只看成套的推荐（Apex 护眼 4 套 + 社区经典 8 套），600+ 完整库收在「全部」里搜索 ----
+type Filter = "featured" | "favorites" | "all";
 const filter = ref<Filter>("featured");
 const query = ref("");
 const filters: { key: Filter; label: string }[] = [
-  { key: "featured", label: "精选" },
-  { key: "dark", label: "深色" },
-  { key: "light", label: "浅色" },
+  { key: "featured", label: "推荐" },
   { key: "favorites", label: "收藏" },
   { key: "all", label: `全部 ${THEME_PRESETS.length}` },
 ];
 
-interface Card extends TermThemePreset {
-  dark: boolean;
-  /** 正文与基础彩色的最低对比度 ≥ 4.5 → 打「高对比」标签 */
-  highContrast: boolean;
-  label?: string;
-}
-const toCard = (t: TermThemePreset, label?: string): Card => ({
-  ...t,
-  dark: isDark(t.theme),
-  highContrast: minContrast(t.theme) >= 4.5,
-  label,
-});
-
-/** 家族视图（精选 / 深色 / 浅色） */
-const familyView = computed(() => {
-  if (filter.value === "favorites" || filter.value === "all") return null;
-  return THEME_FAMILIES.map((f) => ({
-    name: f.name,
-    desc: f.desc,
-    cards: f.variants
-      .map((v) => toCard(presetById(v.id), v.label))
-      .filter((c) => filter.value === "featured" || (filter.value === "dark" ? c.dark : !c.dark)),
-  })).filter((f) => f.cards.length);
-});
-
 /** 平铺视图（收藏 / 全部 / 搜索） */
-const flatCards = computed<Card[]>(() => {
+const flatCards = computed<TermThemePreset[]>(() => {
   const q = query.value.trim().toLowerCase();
   const fav = new Set(p.value.favoriteThemes);
   return THEME_PRESETS.filter((t) => {
     if (q && !t.name.toLowerCase().includes(q) && !t.id.includes(q)) return false;
     return filter.value === "favorites" ? fav.has(t.id) : true;
-  }).map((t) => toCard(t));
+  });
 });
 
-const curatedCount = CURATED_IDS.size;
+const curatedCount = CURATED_FAMILIES.length;
 const activePresetId = computed(() => (p.value.themeId === "custom" ? settings.baseThemeId : p.value.themeId));
-/** 当前主题不在精选里时给个提示，方便找到它 */
-const activeOutsideCurated = computed(
-  () => !CURATED_IDS.has(activePresetId.value) && filter.value === "featured",
-);
+const isTweaked = (id: string) => activePresetId.value === id && p.value.themeId === "custom";
+const cursorOf = (t: TermTheme) => (p.value.cursorFollowsForeground ? t.foreground : t.cursor);
+/** 当前主题不在推荐里时单独列一张卡，不用去 600 套里找自己正在用的是哪个 */
+const activeOutsideCurated = computed(() => (CURATED_IDS.has(activePresetId.value) ? null : presetById(activePresetId.value)));
 
 watch(query, (q) => {
   if (q && filter.value !== "favorites") filter.value = "all";
@@ -145,7 +116,7 @@ const baseColors: { key: keyof TermTheme; label: string }[] = [
   { key: "background", label: "背景" },
   { key: "foreground", label: "文字" },
   { key: "cursor", label: "光标" },
-  { key: "selectionBackground", label: "选区" },
+  { key: "selectionBackground", label: "选区 · 自动校正" },
 ];
 
 // ---- 快捷键录制 ----
@@ -336,7 +307,7 @@ function revealData() {
 
           <!-- ================= 配色主题 ================= -->
           <template v-else-if="settings.section === 'themes'">
-            <h2>配色主题 <span class="muted count">精选 {{ curatedCount }} 套 · 库 {{ THEME_PRESETS.length }} 套</span></h2>
+            <h2>配色主题 <span class="muted count">推荐 {{ curatedCount }} 套，每套深浅成对</span></h2>
             <div class="theme-tools">
               <div class="chips">
                 <button v-for="f in filters" :key="f.key" class="chip" :class="{ active: filter === f.key }" @click="filter = f.key">{{ f.label }}</button>
@@ -345,85 +316,91 @@ function revealData() {
                 <template #prefix><Search :size="13" class="muted" /></template>
               </n-input>
             </div>
-            <p v-if="activeOutsideCurated" class="muted small hint-row">
-              当前使用的「{{ presetById(activePresetId).name }}」不在精选里，可在「全部」中搜索到它。
-            </p>
 
-            <!-- 家族视图 -->
-            <template v-if="familyView">
-              <section v-for="f in familyView" :key="f.name" class="family">
-                <div class="family-head">
-                  <span class="family-name">{{ f.name }}</span>
-                  <span class="muted small">{{ f.desc }}</span>
+            <!-- 推荐：成套展示，一套一行，左深右浅 -->
+            <template v-if="filter === 'featured'">
+              <section v-if="activeOutsideCurated" class="tgroup">
+                <div class="tgroup-head">
+                  <span class="tgroup-name">当前使用</span>
+                  <span class="muted small">这套不在推荐里，仍然照常可用；点 ★ 收藏后会出现在各处的配色快选里</span>
                 </div>
-                <div class="theme-grid compact">
-                  <div
-                    v-for="c in f.cards"
-                    :key="c.id"
-                    class="theme-card"
-                    :class="{ active: activePresetId === c.id }"
-                    :style="{ background: c.theme.background, color: c.theme.foreground }"
-                    @click="settings.setPreset(c.id)"
-                  >
-                    <div class="tc-preview mono">
-                      <div><span :style="{ color: c.theme.green }">❯</span> <span :style="{ color: c.theme.blue }">claude</span> <span :style="{ color: c.theme.brightBlack }"># 注释</span></div>
-                      <div>
-                        <span :style="{ color: c.theme.yellow }">warn</span> <span :style="{ color: c.theme.red }">error</span> <span :style="{ color: c.theme.cyan }">info</span> <span :style="{ color: c.theme.magenta }">*</span>
-                        <span class="tc-cursor" :style="{ background: p.cursorFollowsForeground ? c.theme.foreground : c.theme.cursor }"></span>
-                      </div>
+                <div class="theme-grid">
+                  <ThemeCard
+                    :name="activeOutsideCurated.name"
+                    :theme="activeOutsideCurated.theme"
+                    active
+                    :tweaked="isTweaked(activeOutsideCurated.id)"
+                    :favorite="p.favoriteThemes.includes(activeOutsideCurated.id)"
+                    :cursor="cursorOf(activeOutsideCurated.theme)"
+                    @select="settings.setPreset(activeOutsideCurated.id)"
+                    @toggle-favorite="settings.toggleFavoriteTheme(activeOutsideCurated.id)"
+                  />
+                </div>
+              </section>
+              <section v-for="g in CURATED_GROUPS" :key="g.key" class="tgroup">
+                <div class="tgroup-head">
+                  <span class="tgroup-name">{{ g.name }}</span>
+                  <span class="muted small">{{ g.desc }}</span>
+                </div>
+                <div class="set-grid">
+                  <div v-for="f in g.families" :key="f.name" class="set">
+                    <div class="set-head">
+                      <span class="set-name">{{ f.name }}</span>
+                      <span class="muted small set-desc">{{ f.desc }}</span>
                     </div>
-                    <div class="tc-foot">
-                      <span class="tc-name">{{ c.label ?? c.name }}</span>
-                      <span class="tc-tags">
-                        <span v-if="activePresetId === c.id && p.themeId === 'custom'" class="tc-tag">已微调</span>
-                        <span v-if="c.highContrast" class="tc-tag">高对比</span>
-                        <span class="tc-tag">{{ c.dark ? "深" : "浅" }}</span>
-                      </span>
-                      <button class="tc-star" :class="{ on: p.favoriteThemes.includes(c.id) }" v-tip="'收藏'" @click.stop="settings.toggleFavoriteTheme(c.id)">
-                        <Star :size="12" :fill="p.favoriteThemes.includes(c.id) ? 'currentColor' : 'none'" />
-                      </button>
+                    <div class="set-pair">
+                      <ThemeCard
+                        v-for="v in [{ id: f.dark, label: '深色' }, { id: f.light, label: '浅色' }]"
+                        :key="v.id"
+                        :name="v.label"
+                        :theme="presetById(v.id).theme"
+                        :active="activePresetId === v.id"
+                        :tweaked="isTweaked(v.id)"
+                        :favorite="p.favoriteThemes.includes(v.id)"
+                        :cursor="cursorOf(presetById(v.id).theme)"
+                        @select="settings.setPreset(v.id)"
+                        @toggle-favorite="settings.toggleFavoriteTheme(v.id)"
+                      />
                     </div>
                   </div>
                 </div>
               </section>
-              <div v-if="familyView.length === 0" class="muted empty">没有匹配的主题</div>
             </template>
 
             <!-- 平铺视图：收藏 / 全部 -->
             <div v-else class="theme-grid">
-              <div
+              <ThemeCard
                 v-for="c in flatCards"
                 :key="c.id"
-                class="theme-card"
-                :class="{ active: activePresetId === c.id }"
-                :style="{ background: c.theme.background, color: c.theme.foreground }"
-                @click="settings.setPreset(c.id)"
-              >
-                <div class="tc-preview mono">
-                  <div><span :style="{ color: c.theme.green }">❯</span> <span :style="{ color: c.theme.blue }">claude</span> <span :style="{ color: c.theme.brightBlack }"># 注释</span></div>
-                  <div>
-                    <span :style="{ color: c.theme.yellow }">warn</span> <span :style="{ color: c.theme.red }">error</span> <span :style="{ color: c.theme.cyan }">info</span> <span :style="{ color: c.theme.magenta }">*</span>
-                    <span class="tc-cursor" :style="{ background: p.cursorFollowsForeground ? c.theme.foreground : c.theme.cursor }"></span>
-                  </div>
-                </div>
-                <div class="tc-foot">
-                  <span class="tc-name">{{ c.name }}</span>
-                  <span class="tc-tags">
-                    <span v-if="activePresetId === c.id && p.themeId === 'custom'" class="tc-tag">已微调</span>
-                    <span v-if="c.highContrast" class="tc-tag">高对比</span>
-                    <span class="tc-tag">{{ c.dark ? "深" : "浅" }}</span>
-                  </span>
-                  <button class="tc-star" :class="{ on: p.favoriteThemes.includes(c.id) }" v-tip="'收藏'" @click.stop="settings.toggleFavoriteTheme(c.id)">
-                    <Star :size="12" :fill="p.favoriteThemes.includes(c.id) ? 'currentColor' : 'none'" />
-                  </button>
-                </div>
-              </div>
+                :name="c.name"
+                :theme="c.theme"
+                :active="activePresetId === c.id"
+                :tweaked="isTweaked(c.id)"
+                :favorite="p.favoriteThemes.includes(c.id)"
+                :cursor="cursorOf(c.theme)"
+                @select="settings.setPreset(c.id)"
+                @toggle-favorite="settings.toggleFavoriteTheme(c.id)"
+              />
               <div v-if="flatCards.length === 0" class="muted empty">{{ filter === "favorites" ? "还没有收藏，点卡片右下角的 ★" : "没有匹配的主题" }}</div>
             </div>
 
             <section class="card">
               <div class="toggle">
-                <div><b>可读性增强</b><div class="muted small">自动把对比度过低的颜色推到可读范围：注释灰 ≥ 4:1、彩色 ≥ 3:1。Claude Code / Devin CLI 里的提示字不再看不清；关掉即恢复主题原味。</div></div>
+                <div><b>深浅跟随界面</b><div class="muted small">界面在深色 / 浅色之间切换时，终端配色换成同一套的另一版（只对推荐里成对的主题生效）。界面选「跟随系统」，白天浅色、晚上深色就全自动了。</div></div>
+                <div class="inline sync-controls">
+                  <n-radio-group :value="p.appTheme" size="small" @update:value="(v: 'dark' | 'light' | 'system') => settings.patch({ appTheme: v })">
+                    <n-radio-button value="dark">深色</n-radio-button>
+                    <n-radio-button value="light">浅色</n-radio-button>
+                    <n-radio-button value="system">跟随系统</n-radio-button>
+                  </n-radio-group>
+                  <n-switch :value="p.syncThemeWithAppearance" size="small" @update:value="(v: boolean) => settings.patch({ syncThemeWithAppearance: v })" />
+                </div>
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="toggle">
+                <div><b>可读性增强</b><div class="muted small">自动把看不清的文字推到可读范围：按每个字实际所在的底色保底 4.5:1（暗淡文字减半），程序自己指定的真彩色、选中的文字、色块上的字都算。Claude Code / Devin CLI / Codex 里的提示字不再看不清；关掉即恢复主题原味。</div></div>
                 <n-switch :value="p.boostReadability" size="small" @update:value="(v: boolean) => settings.patch({ boostReadability: v })" />
               </div>
             </section>
@@ -448,7 +425,7 @@ function revealData() {
                 </div>
               </template>
             </section>
-            <p class="muted small credit">主题库来自 iTerm2-Color-Schemes（MIT 许可）。所有打开的终端会实时应用。</p>
+            <p class="muted small credit">Apex 护眼系列为自家调校；其余主题来自 iTerm2-Color-Schemes（MIT 许可）。所有打开的终端会实时应用。</p>
           </template>
 
           <!-- ================= 快捷键 ================= -->
@@ -691,6 +668,11 @@ h3 {
   flex-wrap: wrap;
 }
 
+.sync-controls {
+  flex: none;
+  flex-wrap: nowrap;
+}
+
 .stepper {
   display: flex;
   align-items: center;
@@ -735,30 +717,56 @@ h3 {
   margin-bottom: 12px;
 }
 
-.hint-row {
-  margin: -4px 0 10px;
+.tgroup {
+  margin-bottom: 20px;
 }
 
-.family {
-  margin-bottom: 16px;
-}
-
-.family-head {
+.tgroup-head {
   display: flex;
   align-items: baseline;
   gap: 10px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
-.family-name {
+.tgroup-name {
+  flex: none;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-1);
 }
 
-.theme-grid.compact {
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-  margin-bottom: 0;
+/* 一套 = 一个小组：名字 + 一句话 + 深浅两张卡 */
+.set-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 14px 16px;
+}
+
+.set-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+  min-width: 0;
+}
+
+.set-name {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.set-desc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.set-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .chips {
@@ -796,97 +804,12 @@ h3 {
   margin-bottom: 14px;
 }
 
-.theme-card {
-  border-radius: 10px;
-  border: 2px solid transparent;
-  padding: 10px 12px 8px;
-  cursor: default;
-  box-shadow: 0 0 0 1px var(--border) inset;
-  transition: transform 0.1s;
-}
-
-.theme-card:hover {
-  transform: translateY(-1px);
-}
-
-.theme-card.active {
-  border-color: var(--accent);
-}
-
-.tc-preview {
-  font-size: 11px;
-  line-height: 1.6;
-  white-space: nowrap;
-  overflow: hidden;
-  opacity: 0.95;
-}
-
-.tc-cursor {
-  display: inline-block;
-  width: 7px;
-  height: 12px;
-  margin-left: 6px;
-  vertical-align: text-bottom;
-  border-radius: 1px;
-}
-
 .cursor-swatch {
   display: inline-block;
   width: 14px;
   height: 14px;
   border-radius: 4px;
   border: 1px solid var(--border);
-}
-
-.tc-foot {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  font-size: 12px;
-}
-
-.tc-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 600;
-}
-
-.tc-tags {
-  display: inline-flex;
-  gap: 4px;
-}
-
-.tc-tag {
-  font-size: 10px;
-  padding: 0 5px;
-  border-radius: 4px;
-  background: rgba(127, 127, 127, 0.25);
-}
-
-.tc-star {
-  display: inline-grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border: none;
-  border-radius: 5px;
-  background: transparent;
-  color: inherit;
-  opacity: 0.45;
-  cursor: default;
-}
-
-.tc-star:hover,
-.tc-star.on {
-  opacity: 1;
-}
-
-.tc-star.on {
-  color: #f2c14e;
 }
 
 .empty {

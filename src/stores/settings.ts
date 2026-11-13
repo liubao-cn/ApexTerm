@@ -1,6 +1,7 @@
 import { computed, ref, watch } from "vue";
 import { acceptHMRUpdate, defineStore } from "pinia";
 import { DEFAULT_THEME_ID, FONT_OPTIONS, presetById, toXtermTheme, type TermTheme } from "../themes";
+import { themeAfterAppearanceChange } from "../themeFamilies";
 import { setTooltipDelay } from "../tooltip";
 
 export type AppTheme = "dark" | "light" | "system";
@@ -17,6 +18,8 @@ export interface Prefs {
   themeId: string;
   customTheme: TermTheme | null;
   favoriteThemes: string[];
+  /** 界面深浅切换时，终端配色跟着换成同一套的深 / 浅版（只对推荐目录里成对的主题生效） */
+  syncThemeWithAppearance: boolean;
   fontFamily: string;
   fontSize: number;
   lineHeight: number;
@@ -73,6 +76,7 @@ export const DEFAULTS: Prefs = {
   themeId: DEFAULT_THEME_ID,
   customTheme: null,
   favoriteThemes: [],
+  syncThemeWithAppearance: true,
   fontFamily: FONT_OPTIONS[0],
   fontSize: 13,
   lineHeight: 1.2,
@@ -111,7 +115,10 @@ function load(): Prefs {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return { ...DEFAULTS };
-    const p = { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Prefs>) };
+    const stored = JSON.parse(raw) as Partial<Prefs>;
+    const p = { ...DEFAULTS, ...stored };
+    // 老用户升级上来保持原样（界面变浅时终端不会突然跟着变），想要再到设置里打开；新安装默认开
+    if (stored.syncThemeWithAppearance === undefined) p.syncThemeWithAppearance = false;
     p.favoriteThemes = [...new Set(p.favoriteThemes)];
     return p;
   } catch {
@@ -178,6 +185,12 @@ export const useSettingsStore = defineStore("settings", () => {
     baseThemeId.value = id;
     prefs.value = { ...prefs.value, themeId: id, customTheme: null };
   }
+
+  // 界面深浅变了（或刚打开这个开关）：成对的主题换成同套的另一版；手动点选的变体保持到下次深浅切换
+  watch([appDark, () => prefs.value.syncThemeWithAppearance], ([dark, on]) => {
+    const next = themeAfterAppearanceChange(prefs.value.themeId, dark, on);
+    if (next !== prefs.value.themeId) setPreset(next);
+  });
 
   /** 改某个颜色：自动切到 custom，基于当前配色复制一份再改 */
   function setColor(key: keyof TermTheme, value: string) {

@@ -35,9 +35,9 @@ import {
 import { appShortcut, isMac, isTabModifier } from "../platform";
 import { useQuickCommands } from "../quickCommands";
 import { useShortcutsStore } from "../stores/shortcuts";
-import { presetById } from "../themes";
-import { THEME_FAMILIES } from "../themeCatalog";
+import { minimumContrastFor, presetById } from "../themes";
 import SplitMenu from "./SplitMenu.vue";
+import PaneThemePicker from "./PaneThemePicker.vue";
 
 const props = defineProps<{ session: TermSession; active: boolean }>();
 const store = useTerminalsStore();
@@ -68,28 +68,18 @@ const themeTip = computed(() => {
   return `配色：${name}（${from}）`;
 });
 
-/** 右键菜单「配色」子菜单：精选家族；多变体的家族再套一层 */
-const themeMenu = computed<DropdownOption[]>(() => {
-  const cur = props.session.themeId ?? null;
-  const mark = (id: string | null, label: string) => (cur === id ? `✓ ${label}` : label);
-  const items: DropdownOption[] = [
-    { key: "theme:", label: mark(null, hostThemeId.value ? "跟随主机设置" : "跟随全局设置") },
-    { type: "divider", key: "theme-d" },
-  ];
-  for (const f of THEME_FAMILIES) {
-    if (f.variants.length === 1) {
-      items.push({ key: `theme:${f.variants[0].id}`, label: mark(f.variants[0].id, f.name) });
-    } else {
-      const active = f.variants.some((v) => v.id === cur);
-      items.push({
-        key: `theme-fam:${f.name}`,
-        label: active ? `✓ ${f.name}` : f.name,
-        children: f.variants.map((v) => ({ key: `theme:${v.id}`, label: mark(v.id, v.label) })),
-      });
-    }
-  }
-  return items;
-});
+/** 「此面板配色」快选面板（见 PaneThemePicker.vue）：在右键位置弹出 */
+const themePicker = ref({ show: false, x: 0, y: 0 });
+function setPaneTheme(id: string | null) {
+  store.update(props.session.id, { themeId: id });
+}
+// 面板关掉后把键盘焦点还给终端（Esc 关闭时焦点原本会落空）
+watch(
+  () => themePicker.value.show,
+  (show) => {
+    if (!show && props.active && !settings.open) rt?.term.focus();
+  },
+);
 
 const container = ref<HTMLDivElement | null>(null);
 const searchOpen = ref(false);
@@ -302,7 +292,7 @@ function buildCtxOptions(): DropdownOption[] {
     out.push({ key: "qc", label: "快捷命令", children: quick.groupOptions.value });
   }
   out.push({ type: "divider", key: "d4" });
-  out.push({ key: "theme-menu", label: "此面板配色", children: themeMenu.value });
+  out.push({ key: "theme-menu", label: "此面板配色…" });
   out.push({ key: "appearance", label: `终端外观 / 主题…  ${appShortcut(",")}` });
   out.push({ key: "reconnect", label: "重新连接", disabled: props.session.status === "connecting" });
   out.push({ key: "close", label: `关闭面板  ${appShortcut("w")}` });
@@ -323,8 +313,8 @@ function onContextMenu(e: MouseEvent) {
 
 function onCtxSelect(key: string) {
   ctx.value.show = false;
-  if (key.startsWith("theme:")) {
-    store.update(props.session.id, { themeId: key.slice("theme:".length) || null });
+  if (key === "theme-menu") {
+    themePicker.value = { show: true, x: ctx.value.x, y: ctx.value.y };
     return;
   }
   switch (key) {
@@ -589,6 +579,7 @@ watch(
     rt.term.options.scrollback = ap.scrollback;
     rt.term.options.macOptionIsMeta = ap.optionAsMeta;
     rt.term.options.drawBoldTextInBrightColors = ap.brightBold;
+    rt.term.options.minimumContrastRatio = minimumContrastFor(ap.boostReadability);
     rt.term.options.theme = th;
     setGpuAcceleration(rt, ap.gpuAcceleration);
     if (props.active) scheduleFit();
@@ -708,6 +699,15 @@ onBeforeUnmount(() => {
       :render-label="quick.renderLabel"
       @clickoutside="ctx.show = false"
       @select="onCtxSelect"
+    />
+    <PaneThemePicker
+      v-model:show="themePicker.show"
+      :x="themePicker.x"
+      :y="themePicker.y"
+      :current="session.themeId ?? null"
+      :inherit="hostThemeId ? 'host' : 'global'"
+      @select="setPaneTheme"
+      @more="((themePicker.show = false), settings.show('themes'))"
     />
 
     <div v-if="searchOpen" class="search-bar">
